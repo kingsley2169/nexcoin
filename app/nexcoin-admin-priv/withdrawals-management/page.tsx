@@ -1,10 +1,12 @@
+import { AdminWithdrawalsManagement } from "@/components/neocoin-admin-priv/admin-withdrawals-management";
+import { adminWithdrawalsManagementData } from "@/lib/admin-withdrawals-management";
+
 export const metadata = {
 	title: "Withdrawals Management | Nexcoin Admin",
 	description:
-    //fill this in
-    ""
+		"Review withdrawal requests, AML checks, payout status, and destination wallet risk.",
 };
 
-export default function AdminWithdrawalsManagement() {
-    return <AdminWithdrawalsManagement data={adminWithdrawalsManagementData} />
+export default function AdminWithdrawalsManagementPage() {
+	return <AdminWithdrawalsManagement data={adminWithdrawalsManagementData} />;
 }

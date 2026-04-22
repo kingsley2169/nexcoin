@@ -98,7 +98,7 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
 						Review Deposits
 					</Link>
 					<Link
-						href="/neocoin-admin-priv/withdrawals"
+						href="/nexcoin-admin-priv/withdrawals-management"
 						className={buttonVariants({ size: "md", variant: "outline" })}
 					>
 						Review Withdrawals

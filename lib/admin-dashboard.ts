@@ -117,7 +117,7 @@ export const adminDashboardData: AdminDashboardData = {
 		{
 			age: "18h",
 			amount: "$1,166.77",
-			href: "/neocoin-admin-priv/withdrawals",
+			href: "/nexcoin-admin-priv/withdrawals-management",
 			id: "queue-1",
 			priority: "Urgent",
 			reference: "WD-1041",
@@ -189,7 +189,7 @@ export const adminDashboardData: AdminDashboardData = {
 	riskAlerts: [
 		{
 			description: "Three withdrawals were requested within 20 minutes after a password change.",
-			href: "/neocoin-admin-priv/withdrawals",
+			href: "/nexcoin-admin-priv/withdrawals-management",
 			id: "risk-1",
 			severity: "Urgent",
 			title: "Withdrawal cluster after security change",

@@ -49,7 +49,7 @@ This README tracks the pages planned for the crypto investment website. Check ea
 - [x] User Management Page
 - [x] Investment Plan Management Page
 - [x] Deposit Management Page
-- [ ] Withdrawal Management Page
+- [x] Withdrawal Management Page
 - [ ] Transaction Management Page
 - [ ] KYC Review Page
 - [ ] Support Management Page
