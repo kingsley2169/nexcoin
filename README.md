@@ -29,26 +29,26 @@ This README tracks the pages planned for the crypto investment website. Check ea
 ### User Dashboard Pages
 
 - [x] Dashboard Overview
-- [ ] Portfolio Page
-- [ ] Deposit Page
-- [ ] Withdrawal Page
+- [x] Portfolio Page
+- [x] Deposit Page
+- [x] Withdrawal Page
 - [x] Investment Plans / Subscribe Page
-- [ ] Transactions Page
-- [ ] Wallets Page
-- [ ] Referrals Page
-- [ ] Notifications Page
+- [x] Transactions Page
+- [x] Wallets Page
+- [x] Referrals Page
+- [x] Notifications Page
 - [x] Profile Page
-- [ ] Security Settings Page
-- [ ] KYC / Verification Page
+- [x] Security Settings Page
+- [x] KYC / Verification Page
 - [x] Support Tickets Page
 
 ### Admin Pages
 
 - [ ] Admin Login Page
-- [ ] Admin Dashboard
-- [ ] User Management Page
-- [ ] Investment Plan Management Page
-- [ ] Deposit Management Page
+- [x] Admin Dashboard
+- [x] User Management Page
+- [x] Investment Plan Management Page
+- [x] Deposit Management Page
 - [ ] Withdrawal Management Page
 - [ ] Transaction Management Page
 - [ ] KYC Review Page
