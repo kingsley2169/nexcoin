@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { FormSubmitButton } from "@/components/ui/form-submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn } from "./actions";
 
@@ -133,9 +133,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 </label>
               </div>
 
-              <Button type="submit" size="lg" className="w-full">
+              <FormSubmitButton size="lg" className="w-full" pendingLabel="Signing in…">
                 Sign in
-              </Button>
+              </FormSubmitButton>
             </form>
 
             <p className="mt-6 text-center text-sm text-[#5d6163]">

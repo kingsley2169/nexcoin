@@ -1,12 +1,27 @@
 import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { FormSubmitButton } from "@/components/ui/form-submit-button";
+import { requestPasswordReset } from "./actions";
 
 export const metadata = {
   title: "Forgot Password | Nexcoin",
   description: "Recover access to your Nexcoin investment account.",
 };
 
-export default function ForgotPasswordPage() {
+type ForgotPasswordPageProps = {
+  searchParams?: Promise<{
+    error?: string;
+    success?: string;
+  }>;
+};
+
+export default async function ForgotPasswordPage({
+  searchParams,
+}: ForgotPasswordPageProps) {
+  const params = await searchParams;
+  const errorMessage = params?.error;
+  const successMessage = params?.success;
+
   return (
     <main className="min-h-screen bg-[#f7faf9] text-[#576363]">
       <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-8 px-6 py-10 lg:px-10">
@@ -46,7 +61,19 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
 
-            <form className="mt-8 space-y-5">
+            {errorMessage ? (
+              <p className="mt-6 rounded-md border border-[#f2c5c0] bg-[#fff7f6] px-4 py-3 text-sm font-medium text-[#b1423a]">
+                {errorMessage}
+              </p>
+            ) : null}
+
+            {successMessage ? (
+              <p className="mt-6 rounded-md border border-[#c7e4d5] bg-[#f1fbf6] px-4 py-3 text-sm font-medium text-[#2e8f5b]">
+                {successMessage}
+              </p>
+            ) : null}
+
+            <form action={requestPasswordReset} className="mt-8 space-y-5">
               <div>
                 <label
                   htmlFor="email"
@@ -65,9 +92,9 @@ export default function ForgotPasswordPage() {
                 />
               </div>
 
-              <Button type="submit" size="lg" className="w-full">
+              <FormSubmitButton size="lg" className="w-full" pendingLabel="Sending reset link…">
                 Send reset link
-              </Button>
+              </FormSubmitButton>
             </form>
 
             <div className="mt-6 border-t border-[#e3ecea] pt-6">

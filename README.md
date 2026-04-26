@@ -22,7 +22,7 @@ This README tracks the pages planned for the crypto investment website. Check ea
 - [x] Login Page
 - [x] Signup Page
 - [x] Forgot Password Page
-- [ ] Reset Password Page
+- [x] Reset Password Page
 - [ ] Email Verification Page
 - [ ] Two-Factor Authentication Page
 

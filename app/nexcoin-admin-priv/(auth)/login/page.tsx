@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { FormSubmitButton } from "@/components/ui/form-submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getAdminAccess } from "@/lib/admin-auth";
 import { createClient } from "@/utils/supabase/server";
@@ -150,9 +151,9 @@ export default async function AdminLoginPage({
 								account alone does not grant admin access.
 							</div>
 
-							<Button type="submit" size="lg" className="w-full">
+							<FormSubmitButton size="lg" className="w-full" pendingLabel="Signing in…">
 								Sign in to admin
-							</Button>
+							</FormSubmitButton>
 						</form>
 
 						<div className="mt-6 border-t border-[#e3ecea] pt-6">
