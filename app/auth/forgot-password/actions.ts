@@ -30,6 +30,9 @@ export async function requestPasswordReset(formData: FormData) {
 		? `${proto}://${host}/auth/reset-password`
 		: undefined;
 
+	console.log("[forgot-password] redirectTo =", redirectTo); //
+	console.log("[forgot-password] host =", host);
+
 	const { error } = await supabase.auth.resetPasswordForEmail(email, {
 		redirectTo,
 	});
