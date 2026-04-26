@@ -13,7 +13,6 @@ export const metadata = {
 
 type ResetPasswordPageProps = {
   searchParams?: Promise<{
-    code?: string;
     error?: string;
     success?: string;
   }>;
@@ -25,29 +24,10 @@ export default async function ResetPasswordPage({
   const params = await searchParams;
   const errorMessage = params?.error;
   const successMessage = params?.success;
-  const code = params?.code;
 
-  // The reset link from the email lands here with ?code=xxx. Exchange it for
-  // a session so the user is authenticated when they submit the new password.
-  // After that, the URL still shows ?code=xxx but the cookie carries the
-  // session — so we don't re-exchange on subsequent reloads (it would error).
-  let exchangeError: string | null = null;
-  if (code) {
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        exchangeError =
-          "This reset link is invalid or expired. Please request a new one.";
-      }
-    }
-  }
-
+  // The reset link routes through /auth/callback first, which exchanges the
+  // code for a session and sets cookies. By the time the user lands here, the
+  // session is established (or the callback already redirected them away).
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const {
@@ -95,12 +75,6 @@ export default async function ResetPasswordPage({
               </p>
             </div>
 
-            {exchangeError ? (
-              <p className="mt-6 rounded-md border border-[#f2c5c0] bg-[#fff7f6] px-4 py-3 text-sm font-medium text-[#b1423a]">
-                {exchangeError}
-              </p>
-            ) : null}
-
             {errorMessage ? (
               <p className="mt-6 rounded-md border border-[#f2c5c0] bg-[#fff7f6] px-4 py-3 text-sm font-medium text-[#b1423a]">
                 {errorMessage}
@@ -113,7 +87,7 @@ export default async function ResetPasswordPage({
               </p>
             ) : null}
 
-            {hasSession && !exchangeError ? (
+            {hasSession ? (
               <form action={updatePassword} className="mt-8 space-y-5">
                 <div>
                   <label

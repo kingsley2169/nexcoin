@@ -8,13 +8,20 @@ export async function GET(request: NextRequest) {
 	const code = searchParams.get("code");
 	const tokenHash = searchParams.get("token_hash");
 	const type = searchParams.get("type") as EmailOtpType | null;
+	const nextParam = searchParams.get("next");
 
 	const forwardedHost = request.headers.get("x-forwarded-host");
 	const isLocal = process.env.NODE_ENV === "development";
 	const base =
 		!isLocal && forwardedHost ? `https://${forwardedHost}` : origin;
 
+	// Only honour `next` if it's a same-origin path under /auth/, so a malicious
+	// recovery link can't redirect to an external site.
+	const safeNext =
+		nextParam && nextParam.startsWith("/auth/") ? nextParam : null;
+
 	let verified = false;
+	let recoveryFlow = type === "recovery";
 
 	if (tokenHash && type) {
 		const cookieStore = await cookies();
@@ -25,14 +32,42 @@ export async function GET(request: NextRequest) {
 		});
 		if (!error) verified = true;
 	} else if (code) {
-		// PKCE flow: Supabase already verified the email upstream before
-		// redirecting here with the code. Even if exchangeCodeForSession fails
-		// (e.g. the verifier cookie is missing because the link was opened in a
-		// different browser), the email is already confirmed on Supabase's side.
+		// PKCE flow: Supabase already verified upstream. exchangeCodeForSession
+		// completes the handshake and writes the session cookies on this
+		// response. If the verifier cookie is missing (link opened in a
+		// different browser) the exchange fails — for password recovery this
+		// means the user must request a fresh link, since updateUser later
+		// requires a real session.
 		const cookieStore = await cookies();
 		const supabase = createClient(cookieStore);
-		await supabase.auth.exchangeCodeForSession(code).catch(() => null);
-		verified = true;
+		const { error } = await supabase.auth.exchangeCodeForSession(code);
+		if (error) {
+			if (recoveryFlow || safeNext === "/auth/reset-password") {
+				return NextResponse.redirect(
+					`${base}/auth/forgot-password?error=Your reset link is invalid or expired. Please request a new one.`,
+				);
+			}
+			// Email confirmation: even if the cookie exchange failed, the
+			// email is already confirmed upstream — let the user sign in.
+			verified = true;
+		} else {
+			verified = true;
+			// Same-browser PKCE password recovery comes through here; treat
+			// it as a recovery flow even if `type=` wasn't passed in the URL.
+			if (safeNext === "/auth/reset-password") {
+				recoveryFlow = true;
+			}
+		}
+	}
+
+	if (verified && recoveryFlow) {
+		return NextResponse.redirect(
+			`${base}${safeNext ?? "/auth/reset-password"}`,
+		);
+	}
+
+	if (verified && safeNext) {
+		return NextResponse.redirect(`${base}${safeNext}`);
 	}
 
 	if (verified) {

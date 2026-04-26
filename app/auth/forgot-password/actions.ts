@@ -26,12 +26,12 @@ export async function requestPasswordReset(formData: FormData) {
 	const host =
 		requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
 	const proto = requestHeaders.get("x-forwarded-proto") ?? "https";
+	// Route through /auth/callback so the code-for-session exchange happens in
+	// a route handler (which can write cookies). It then redirects on to
+	// /auth/reset-password with the session already established.
 	const redirectTo = host
-		? `${proto}://${host}/auth/reset-password`
+		? `${proto}://${host}/auth/callback?next=/auth/reset-password`
 		: undefined;
-
-	console.log("[forgot-password] redirectTo =", redirectTo); //
-	console.log("[forgot-password] host =", host);
 
 	const { error } = await supabase.auth.resetPasswordForEmail(email, {
 		redirectTo,
