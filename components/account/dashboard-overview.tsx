@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 
-type DashboardOverviewData = {
+export type DashboardOverviewData = {
+	accountDetails: Array<{
+		label: string;
+		value: string;
+	}>;
 	activePlans: Array<{
 		amount: string;
 		expectedReturn: string;
@@ -44,8 +48,8 @@ export function DashboardOverview({ data }: { data: DashboardOverviewData }) {
 						Account Overview
 					</h1>
 					<p className="mt-3 text-sm leading-6 text-[#5d6163] sm:text-base">
-						Track your portfolio, active plans, deposits, withdrawals, and
-						earnings.
+						Welcome back, {data.user.name}. Track your portfolio, active
+						plans, deposits, withdrawals, and earnings.
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-3">
@@ -82,6 +86,31 @@ export function DashboardOverview({ data }: { data: DashboardOverviewData }) {
 						</p>
 					</div>
 				))}
+			</section>
+
+			<section className="rounded-lg border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
+				<div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+					<div>
+						<p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#5F9EA0]">
+							Account Details
+						</p>
+						<h2 className="mt-2 text-xl font-semibold text-[#576363]">
+							Your profile at a glance
+						</h2>
+					</div>
+				</div>
+				<div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+					{data.accountDetails.map((detail) => (
+						<div key={detail.label} className="rounded-md bg-[#f7faf9] p-4">
+							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5F9EA0]">
+								{detail.label}
+							</p>
+							<p className="mt-2 text-base font-semibold text-[#576363]">
+								{detail.value}
+							</p>
+						</div>
+					))}
+				</div>
 			</section>
 
 			<section className="rounded-lg border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
@@ -180,57 +209,79 @@ export function DashboardOverview({ data }: { data: DashboardOverviewData }) {
 					<h2 className="text-xl font-semibold text-[#576363]">
 						Active plans
 					</h2>
-					<div className="mt-6 space-y-5">
-						{data.activePlans.map((plan) => (
-							<div key={plan.name} className="rounded-md bg-[#f7faf9] p-4">
-								<div className="flex items-start justify-between gap-4">
-									<div>
-										<p className="font-semibold text-[#576363]">
-											{plan.name}
-										</p>
-										<p className="mt-1 text-sm text-[#5d6163]">
-											{plan.amount} invested
-										</p>
+					{data.activePlans.length > 0 ? (
+						<div className="mt-6 space-y-5">
+							{data.activePlans.map((plan) => (
+								<div key={plan.name} className="rounded-md bg-[#f7faf9] p-4">
+									<div className="flex items-start justify-between gap-4">
+										<div>
+											<p className="font-semibold text-[#576363]">
+												{plan.name}
+											</p>
+											<p className="mt-1 text-sm text-[#5d6163]">
+												{plan.amount} invested
+											</p>
+										</div>
+										<span className="rounded-md bg-[#e5f3f1] px-2.5 py-1 text-xs font-semibold text-[#3c7f80]">
+											{plan.status}
+										</span>
 									</div>
-									<span className="rounded-md bg-[#e5f3f1] px-2.5 py-1 text-xs font-semibold text-[#3c7f80]">
-										{plan.status}
-									</span>
+									<div className="mt-4 h-2 rounded-full bg-white">
+										<div
+											className="h-2 rounded-full bg-[#5F9EA0]"
+											style={{ width: `${plan.progress}%` }}
+										/>
+									</div>
+									<div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+										<div>
+											<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
+												Expected
+											</p>
+											<p className="mt-1 font-semibold text-[#576363]">
+												{plan.expectedReturn}
+											</p>
+										</div>
+										<div>
+											<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
+												Started
+											</p>
+											<p className="mt-1 font-semibold text-[#576363]">
+												{plan.startDate}
+											</p>
+										</div>
+										<div>
+											<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
+												Matures
+											</p>
+											<p className="mt-1 font-semibold text-[#576363]">
+												{plan.maturityDate}
+											</p>
+										</div>
+									</div>
 								</div>
-								<div className="mt-4 h-2 rounded-full bg-white">
-									<div
-										className="h-2 rounded-full bg-[#5F9EA0]"
-										style={{ width: `${plan.progress}%` }}
-									/>
-								</div>
-								<div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-									<div>
-										<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
-											Expected
-										</p>
-										<p className="mt-1 font-semibold text-[#576363]">
-											{plan.expectedReturn}
-										</p>
-									</div>
-									<div>
-										<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
-											Started
-										</p>
-										<p className="mt-1 font-semibold text-[#576363]">
-											{plan.startDate}
-										</p>
-									</div>
-									<div>
-										<p className="text-xs uppercase tracking-[0.14em] text-[#5F9EA0]">
-											Matures
-										</p>
-										<p className="mt-1 font-semibold text-[#576363]">
-											{plan.maturityDate}
-										</p>
-									</div>
-								</div>
-							</div>
-						))}
-					</div>
+							))}
+						</div>
+					) : (
+						<div className="mt-6 rounded-md bg-[#f7faf9] p-5">
+							<p className="font-semibold text-[#576363]">
+								No active plans yet.
+							</p>
+							<p className="mt-2 text-sm leading-6 text-[#5d6163]">
+								Choose an investment plan when you are ready to start tracking
+								active returns here.
+							</p>
+							<Link
+								href="/account/plans"
+								className={buttonVariants({
+									className: "mt-4",
+									size: "md",
+									variant: "secondary",
+								})}
+							>
+								View Plans
+							</Link>
+						</div>
+					)}
 				</section>
 
 				<section className="rounded-lg border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">

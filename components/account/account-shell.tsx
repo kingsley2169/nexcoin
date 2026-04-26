@@ -45,9 +45,27 @@ function SidebarToggleIcon({
 	);
 }
 
-export function AccountShell({ children }: { children: React.ReactNode }) {
+function getInitials(name: string) {
+	return name
+		.split(" ")
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part.charAt(0).toUpperCase())
+		.join("");
+}
+
+export function AccountShell({
+	accountEmail,
+	accountName,
+	children,
+}: {
+	accountEmail: string;
+	accountName: string;
+	children: React.ReactNode;
+}) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [isCollapsed, setIsCollapsed] = useState(false);
+	const initials = getInitials(accountName) || "AC";
 
 	return (
 		<div className="min-h-screen overscroll-none bg-[#f7faf9] text-[#576363]">
@@ -122,14 +140,14 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
 						<div className="flex items-center gap-3">
 							<div className="hidden text-right sm:block">
 								<p className="text-sm font-semibold leading-5 text-[#576363]">
-									Alex Morgan
+									{accountName}
 								</p>
 								<p className="text-xs leading-4 text-[#5d6163]">
-									Verified account
+									{accountEmail}
 								</p>
 							</div>
 							<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5F9EA0] text-sm font-semibold text-white">
-								AM
+								{initials}
 							</div>
 						</div>
 					</div>

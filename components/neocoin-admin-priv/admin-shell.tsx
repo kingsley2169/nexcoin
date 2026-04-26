@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "../ui/button";
 import { AdminSidebar } from "@/components/neocoin-admin-priv/admin-sidebar";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,11 @@ function SidebarToggleIcon({
 export function AdminShell({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const pathname = usePathname();
+
+    if (pathname.startsWith("/nexcoin-admin-priv/login")) {
+        return <div className="min-h-screen bg-[#f7faf9] text-[#576363]">{children}</div>;
+    }
 
     return (
         <div className="min-h-screen overscroll-none bg-[#f7faf9] text-[#576363]">

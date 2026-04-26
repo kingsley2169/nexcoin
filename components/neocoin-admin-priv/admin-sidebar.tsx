@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTransition } from "react";
+import { adminSignOut } from "@/app/nexcoin-admin-priv/actions";
 import { cn } from "@/lib/utils";
 
 type MenuIconProps = {
@@ -142,6 +144,21 @@ function SettingsIcon({ className }: MenuIconProps) {
 	);
 }
 
+function SignOutIcon({ className }: MenuIconProps) {
+	return (
+		<svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+			<path
+				d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2M10 12h11M18 8l4 4-4 4"
+				fill="none"
+				stroke="currentColor"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth="2"
+			/>
+		</svg>
+	);
+}
+
 const adminBase = "/nexcoin-admin-priv";
 
 const menuItems = [
@@ -179,6 +196,15 @@ export function AdminSidebar({
 	onNavigate?: () => void;
 }) {
 	const pathname = usePathname();
+	const [isSigningOut, startSignOutTransition] = useTransition();
+
+	const handleSignOut = () => {
+		if (isSigningOut) return;
+		startSignOutTransition(async () => {
+			onNavigate?.();
+			await adminSignOut();
+		});
+	};
 
 	return (
 		<aside className="flex h-full flex-col bg-white">
@@ -248,6 +274,24 @@ export function AdminSidebar({
 					})}
 				</div>
 			</nav>
+
+			<div className="border-t border-[#d7e5e3] p-3">
+				<button
+					type="button"
+					onClick={handleSignOut}
+					disabled={isSigningOut}
+					title={collapsed ? "Sign out" : undefined}
+					className={cn(
+						"flex w-full min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-[#b1423a] transition hover:bg-[#fff7f6] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#b1423a]/15 disabled:opacity-60",
+						collapsed && "justify-center px-0",
+					)}
+				>
+					<SignOutIcon className="h-5 w-5 shrink-0" />
+					<span className={cn(collapsed && "sr-only")}>
+						{isSigningOut ? "Signing out…" : "Sign out"}
+					</span>
+				</button>
+			</div>
 
 			<div className={cn("border-t border-[#d7e5e3] p-4", collapsed && "hidden")}>
 				<div className="rounded-lg bg-[#f7faf9] p-4">

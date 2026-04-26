@@ -11,7 +11,7 @@ const basicInformation = [
 	"Nexcoin provides a password recovery system for users who need to regain access to their accounts.",
 	"During a loan request, users are not expected to withdraw or invest loan funds immediately after receiving them from Nexcoin without first contacting customer support. If a user does so, the account may be automatically deactivated, and Nexcoin will not be responsible for any related loss or damage.",
 	"To withdraw loan funds, users must submit valid documents, such as a National ID or passport and a utility bill.",
-	"Deposits are accepted in Bitcoin, Ethereum, cash payment, PayPal, and Dogecoin. Cash and PayPal deposits are available for investors in the United States. Other e-currencies may be accepted outside the United States.",
+	"Deposits are accepted only in supported crypto assets: Bitcoin, Ethereum, and USDT. Users must send each asset through the matching network shown in their account.",
 	"Once funds are deposited into a Nexcoin account, they cannot be withdrawn back unless they have first been invested. A funded account cannot withdraw the funded amount until it has gone through the investment process.",
 ];
 

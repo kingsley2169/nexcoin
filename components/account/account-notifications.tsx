@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import {
 	type NotificationCategory,
 	type NotificationItem,
@@ -9,6 +10,11 @@ import {
 	type NotificationsData,
 	notificationCategoryLabels,
 } from "@/lib/notifications";
+import {
+	markAllNotificationsRead,
+	markNotificationRead,
+	updateNotificationPreference,
+} from "@/app/account/notifications/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -106,10 +112,15 @@ function SearchIcon({ className }: { className?: string }) {
 }
 
 export function AccountNotifications({ data }: AccountNotificationsProps) {
-	const [items, setItems] = useState(data.items);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const items = data.items;
 	const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
 	const [readFilter, setReadFilter] = useState<ReadFilter>("all");
 	const [query, setQuery] = useState("");
+	const [notice, setNotice] = useState<
+		{ tone: "error" | "success"; message: string } | null
+	>(null);
 
 	const summary = useMemo(() => {
 		const unread = items.filter((item) => !item.isRead).length;
@@ -157,15 +168,33 @@ export function AccountNotifications({ data }: AccountNotificationsProps) {
 	}, [categoryFilter, items, query, readFilter]);
 
 	const markAllRead = () => {
-		setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await markAllNotificationsRead();
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			router.refresh();
+		});
 	};
 
-	const toggleRead = (id: string) => {
-		setItems((current) =>
-			current.map((item) =>
-				item.id === id ? { ...item, isRead: !item.isRead } : item,
-			),
-		);
+	const markRead = (id: string) => {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await markNotificationRead(id);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			router.refresh();
+		});
 	};
 
 	return (
@@ -200,6 +229,21 @@ export function AccountNotifications({ data }: AccountNotificationsProps) {
 				</div>
 			</header>
 
+			{notice ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
+
 			<section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<SummaryCard
 					hint="Messages that need attention"
@@ -232,7 +276,7 @@ export function AccountNotifications({ data }: AccountNotificationsProps) {
 					onCategoryChange={setCategoryFilter}
 					onQueryChange={setQuery}
 					onReadFilterChange={setReadFilter}
-					onToggleRead={toggleRead}
+					onMarkRead={markRead}
 					query={query}
 					readFilter={readFilter}
 				/>
@@ -277,7 +321,7 @@ function NotificationsList({
 	onCategoryChange,
 	onQueryChange,
 	onReadFilterChange,
-	onToggleRead,
+	onMarkRead,
 	query,
 	readFilter,
 }: {
@@ -286,7 +330,7 @@ function NotificationsList({
 	onCategoryChange: (value: CategoryFilter) => void;
 	onQueryChange: (value: string) => void;
 	onReadFilterChange: (value: ReadFilter) => void;
-	onToggleRead: (id: string) => void;
+	onMarkRead: (id: string) => void;
 	query: string;
 	readFilter: ReadFilter;
 }) {
@@ -381,7 +425,7 @@ function NotificationsList({
 						<NotificationRow
 							key={item.id}
 							item={item}
-							onToggleRead={() => onToggleRead(item.id)}
+							onMarkRead={() => onMarkRead(item.id)}
 						/>
 					))
 				)}
@@ -392,10 +436,10 @@ function NotificationsList({
 
 function NotificationRow({
 	item,
-	onToggleRead,
+	onMarkRead,
 }: {
 	item: NotificationItem;
-	onToggleRead: () => void;
+	onMarkRead: () => void;
 }) {
 	return (
 		<article
@@ -444,15 +488,17 @@ function NotificationRow({
 					</Link>
 				) : null}
 			</div>
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				className="self-start"
-				onClick={onToggleRead}
-			>
-				{item.isRead ? "Mark Unread" : "Mark Read"}
-			</Button>
+			{item.isRead ? null : (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="self-start"
+					onClick={onMarkRead}
+				>
+					Mark Read
+				</Button>
+			)}
 		</article>
 	);
 }
@@ -462,19 +508,72 @@ function PreferencesPanel({
 }: {
 	preferences: NotificationPreference[];
 }) {
-	const [settings, setSettings] = useState(preferences);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const [optimistic, setOptimistic] = useState<
+		Record<string, Partial<Pick<NotificationPreference, "email" | "inApp" | "sms">>>
+	>({});
+	const [error, setError] = useState<string | null>(null);
+
+	const settings = preferences.map((preference) => ({
+		...preference,
+		...(optimistic[preference.id] ?? {}),
+	}));
 
 	const toggle = (
 		id: string,
 		channel: "email" | "inApp" | "sms",
 	) => {
-		setSettings((current) =>
-			current.map((setting) =>
-				setting.id === id
-					? { ...setting, [channel]: !setting[channel] }
-					: setting,
-			),
-		);
+		if (isPending) return;
+
+		const current = settings.find((setting) => setting.id === id);
+		if (!current) return;
+
+		const next = !current[channel];
+
+		setOptimistic((map) => ({
+			...map,
+			[id]: { ...map[id], [channel]: next },
+		}));
+		setError(null);
+
+		const dbCategory = (
+			id === "transactions"
+				? "transaction"
+				: id === "investments"
+					? "investment"
+					: id
+		) as "account" | "investment" | "security" | "support" | "transaction";
+
+		const dbChannel = channel === "inApp" ? "in_app" : channel;
+
+		startTransition(async () => {
+			const result = await updateNotificationPreference(
+				dbCategory,
+				dbChannel,
+				next,
+			);
+
+			if (!result.ok) {
+				setOptimistic((map) => {
+					const copy = { ...map };
+					if (copy[id]) {
+						const updated = { ...copy[id] };
+						delete updated[channel];
+						if (Object.keys(updated).length === 0) {
+							delete copy[id];
+						} else {
+							copy[id] = updated;
+						}
+					}
+					return copy;
+				});
+				setError(result.error);
+				return;
+			}
+
+			router.refresh();
+		});
 	};
 
 	return (
@@ -491,6 +590,16 @@ function PreferencesPanel({
 						</p>
 					</div>
 				</div>
+
+				{error ? (
+					<div
+						role="status"
+						aria-live="polite"
+						className="mt-4 rounded-md border border-[#f2c5c0] bg-[#fff7f6] px-3 py-2 text-xs font-semibold text-[#b1423a]"
+					>
+						{error}
+					</div>
+				) : null}
 
 				<div className="mt-5 space-y-4">
 					{settings.map((setting) => (

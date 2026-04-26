@@ -31,10 +31,7 @@ const planGuides = [
 const depositMethods = [
 	"Bitcoin",
 	"Ethereum",
-	"Dogecoin",
-	"Cash payment",
-	"PayPal",
-	"Other supported e-currencies",
+	"USDT",
 ];
 
 export default function PlansPage() {
@@ -172,9 +169,9 @@ export default function PlansPage() {
 							Funding options for different users.
 						</h2>
 						<p className="mt-4 max-w-xl text-base leading-7 text-[#5d6163]">
-							Nexcoin accepts several funding methods. Cash and PayPal deposits
-							are intended for United States investors, while other supported
-							e-currencies may be used outside the United States.
+							Nexcoin accepts crypto deposits only. Users can fund with Bitcoin,
+							Ethereum, or USDT through the matching network shown in their
+							account.
 						</p>
 					</div>
 

@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type AdminWithdrawalStatus =
 	| "AML Review"
 	| "Approved"
@@ -68,153 +70,225 @@ export type AdminWithdrawalsManagementData = {
 	withdrawals: AdminWithdrawal[];
 };
 
-export const adminWithdrawalsManagementData: AdminWithdrawalsManagementData = {
-	summary: {
-		amlReviewCount: 8,
-		amlReviewUsd: 21840,
-		averageProcessingTime: "13.2 h",
-		completedTodayUsd: 62400,
-		pendingCount: 17,
-		pendingUsd: 48250,
-		processingCount: 6,
-		processingUsd: 18910,
-		rejectedTodayUsd: 3200,
-	},
-	withdrawals: [
-		{
-			accountStatus: "Flagged",
-			amount: 0.018,
-			amountUsd: 1166.77,
-			assetSymbol: "BTC",
-			checks: [
-				{ label: "KYC approved", status: "Warning" },
-				{ label: "2FA confirmed", status: "Passed" },
-				{ label: "Destination address saved", status: "Passed" },
-				{ label: "Recent password change", status: "Passed" },
-				{ label: "Deposit method alignment", status: "Passed" },
-			],
-			createdAt: "2026-04-20T14:02:00Z",
-			destinationAddress: "bc1qxyz2r9xk7t8h4ydp3qmn6v8tw2l9j5s7d3f0wlh",
-			destinationLabel: "Ledger Hardware",
-			fee: 0.0005,
-			id: "withdrawal-1041",
-			internalNotes: ["Hold until KYC document update is reviewed."],
-			kycStatus: "Pending",
-			netAmount: 0.0175,
-			network: "Bitcoin",
-			reference: "WD-1041",
-			risk: "Medium",
-			securityNotes: ["Account is flagged because KYC is pending."],
-			status: "Pending",
-			timeline: [
-				{ createdAt: "2026-04-20T14:02:00Z", id: "tl-1", label: "Withdrawal requested" },
-				{ createdAt: "2026-04-20T14:03:00Z", id: "tl-2", label: "2FA confirmed" },
-				{ createdAt: "2026-04-20T14:08:00Z", id: "tl-3", label: "AML review started" },
-			],
-			userEmail: "alex.morgan@example.com",
-			userName: "Alex Morgan",
-		},
-		{
-			accountStatus: "Active",
-			amount: 0.42,
-			amountUsd: 1335.71,
-			assetSymbol: "ETH",
-			checks: [
-				{ label: "KYC approved", status: "Passed" },
-				{ label: "2FA confirmed", status: "Passed" },
-				{ label: "Destination address saved", status: "Passed" },
-				{ label: "Amount threshold", status: "Passed" },
-			],
-			createdAt: "2026-04-18T09:45:00Z",
-			destinationAddress: "0xa1b2c3d4e5f67890abcdef1234567890abcd9f3d",
-			destinationLabel: "Main ETH Wallet",
-			fee: 0.003,
-			id: "withdrawal-1039",
-			internalNotes: ["Completed automatically after admin approval."],
-			kycStatus: "Approved",
-			netAmount: 0.417,
-			network: "Ethereum (ERC-20)",
-			reference: "WD-1039",
-			risk: "Low",
-			securityNotes: ["No risk flags."],
-			status: "Completed",
-			timeline: [
-				{ createdAt: "2026-04-18T09:45:00Z", id: "tl-4", label: "Withdrawal requested" },
-				{ createdAt: "2026-04-18T10:02:00Z", id: "tl-5", label: "Approved by admin" },
-				{ createdAt: "2026-04-18T10:20:00Z", id: "tl-6", label: "Completed on-chain" },
-			],
-			txHash: "0x7a3f9c2b1e8d4a6f5c9b0e7d3a1f2c4b8e5d6a9f",
-			userEmail: "maya.chen@example.com",
-			userName: "Maya Chen",
-		},
-		{
-			accountStatus: "Flagged",
-			amount: 12000,
-			amountUsd: 12000,
-			assetSymbol: "USDT",
-			checks: [
-				{ label: "KYC approved", status: "Passed" },
-				{ label: "2FA confirmed", status: "Passed" },
-				{ label: "New device login", status: "Warning" },
-				{ label: "Amount threshold", status: "Warning" },
-				{ label: "Destination address saved", status: "Passed" },
-			],
-			createdAt: "2026-04-22T08:20:00Z",
-			destinationAddress: "TXy4NnFv8qK2j9Rp7sL3uD6gH1mA5zXp4aBc",
-			destinationLabel: "Binance Exchange",
-			fee: 1,
-			id: "withdrawal-1045",
-			internalNotes: ["Large withdrawal after new device sign-in. Awaiting support confirmation."],
-			kycStatus: "Approved",
-			netAmount: 11999,
-			network: "Tron (TRC-20)",
-			reference: "WD-1045",
-			risk: "High",
-			securityNotes: ["New device sign-in detected within 24 hours.", "Amount exceeds manual-review threshold."],
-			status: "AML Review",
-			timeline: [
-				{ createdAt: "2026-04-22T08:20:00Z", id: "tl-7", label: "Withdrawal requested" },
-				{ createdAt: "2026-04-22T08:25:00Z", id: "tl-8", label: "AML hold applied" },
-			],
-			userEmail: "victor.stone@example.com",
-			userName: "Victor Stone",
-		},
-		{
-			accountStatus: "Active",
-			amount: 320,
-			amountUsd: 320,
-			assetSymbol: "USDT",
-			checks: [
-				{ label: "KYC approved", status: "Passed" },
-				{ label: "2FA confirmed", status: "Passed" },
-				{ label: "Destination address saved", status: "Passed" },
-			],
-			createdAt: "2026-04-15T17:18:00Z",
-			destinationAddress: "TXy4NnFv8qK2j9Rp7sL3uD6gH1mA5zXp4aBc",
-			destinationLabel: "Binance Exchange",
-			fee: 1,
-			id: "withdrawal-1033",
-			internalNotes: ["Payout is being batched with other TRC-20 requests."],
-			kycStatus: "Approved",
-			netAmount: 319,
-			network: "Tron (TRC-20)",
-			reference: "WD-1033",
-			risk: "Low",
-			securityNotes: ["No risk flags."],
-			status: "Processing",
-			timeline: [
-				{ createdAt: "2026-04-15T17:18:00Z", id: "tl-9", label: "Withdrawal requested" },
-				{ createdAt: "2026-04-15T18:00:00Z", id: "tl-10", label: "Approved by admin" },
-				{ createdAt: "2026-04-15T18:15:00Z", id: "tl-11", label: "Payout processing" },
-			],
-			userEmail: "daniel.brooks@example.com",
-			userName: "Daniel Brooks",
-		},
-	],
-	rules: [
-		"Approve withdrawals only after required KYC, 2FA, and destination checks pass.",
-		"Hold requests with recent password changes, new device logins, or large amount thresholds.",
-		"Reject withdrawals with failed identity checks or unsupported destination networks.",
-		"Record internal notes before approving high-risk payouts.",
-	],
+type SummaryRow = {
+	aml_review_count: number | string;
+	aml_review_usd: number | string;
+	average_processing_hours: number | string;
+	completed_today_usd: number | string;
+	pending_count: number | string;
+	pending_usd: number | string;
+	processing_count: number | string;
+	processing_usd: number | string;
+	rejected_today_usd: number | string;
 };
+
+type WithdrawalRow = {
+	account_status: string | null;
+	amount: number | string;
+	amount_usd: number | string;
+	asset_symbol: string;
+	checks:
+		| Array<{
+				id?: string;
+				label?: string;
+				status?: string;
+		  }>
+		| null;
+	created_at: string;
+	destination_address: string;
+	destination_label: string;
+	fee: number | string;
+	id: string;
+	internal_notes:
+		| Array<{
+				note?: string;
+		  }>
+		| null;
+	kyc_status: string | null;
+	net_amount: number | string;
+	network: string;
+	reference: string;
+	risk: string | null;
+	security_notes: string[] | null;
+	status: string;
+	timeline:
+		| Array<{
+				createdAt?: string;
+				id?: string;
+				label?: string;
+		  }>
+		| null;
+	tx_hash: string | null;
+	user_email: string | null;
+	user_name: string | null;
+};
+
+const rules = [
+	"Approve withdrawals only after required KYC, 2FA, and destination checks pass.",
+	"Hold requests with recent password changes, new device logins, or large amount thresholds.",
+	"Reject withdrawals with failed identity checks or unsupported destination networks.",
+	"Record internal notes before approving high-risk payouts.",
+];
+
+function toNumber(value: number | string | null | undefined) {
+	if (typeof value === "number") return value;
+	if (typeof value === "string" && value.length > 0) return Number(value);
+	return 0;
+}
+
+function mapStatus(value: string): AdminWithdrawalStatus {
+	switch (value) {
+		case "approved":
+			return "Approved";
+		case "aml_review":
+			return "AML Review";
+		case "completed":
+			return "Completed";
+		case "processing":
+			return "Processing";
+		case "rejected":
+			return "Rejected";
+		default:
+			return "Pending";
+	}
+}
+
+function mapRisk(value: string | null): AdminWithdrawalRisk {
+	switch (value) {
+		case "high":
+			return "High";
+		case "medium":
+			return "Medium";
+		default:
+			return "Low";
+	}
+}
+
+function mapKyc(value: string | null): AdminWithdrawalKycStatus {
+	switch (value) {
+		case "approved":
+			return "Approved";
+		case "pending":
+		case "in_review":
+		case "needs_resubmission":
+			return "Pending";
+		case "rejected":
+			return "Rejected";
+		default:
+			return "Unverified";
+	}
+}
+
+function mapAccountStatus(
+	value: string | null,
+): AdminWithdrawal["accountStatus"] {
+	switch (value) {
+		case "flagged":
+			return "Flagged";
+		case "suspended":
+			return "Suspended";
+		default:
+			return "Active";
+	}
+}
+
+function mapCheckStatus(value: string | undefined): AdminWithdrawalCheckStatus {
+	switch (value) {
+		case "passed":
+			return "Passed";
+		case "failed":
+			return "Failed";
+		default:
+			return "Warning";
+	}
+}
+
+function formatProcessingHours(hours: number) {
+	if (hours <= 0) return "—";
+	if (hours < 1) return `${Math.round(hours * 60)} min`;
+	if (hours < 24) return `${hours.toFixed(1)} h`;
+	return `${(hours / 24).toFixed(1)} d`;
+}
+
+export async function getAdminWithdrawalsManagementData(
+	supabase: SupabaseClient,
+): Promise<AdminWithdrawalsManagementData> {
+	const [summaryResult, withdrawalsResult] = await Promise.all([
+		supabase
+			.rpc("get_admin_withdrawal_management_summary")
+			.single<SummaryRow>(),
+		supabase
+			.from("admin_withdrawal_management_view")
+			.select(
+				"id,reference,user_name,user_email,account_status,kyc_status,asset_symbol,network,amount,amount_usd,fee,net_amount,destination_label,destination_address,status,risk,security_notes,tx_hash,internal_notes,timeline,checks,created_at",
+			)
+			.order("created_at", { ascending: false })
+			.returns<WithdrawalRow[]>(),
+	]);
+
+	if (summaryResult.error) throw new Error(summaryResult.error.message);
+	if (withdrawalsResult.error) throw new Error(withdrawalsResult.error.message);
+
+	const summary = summaryResult.data;
+
+	const withdrawals: AdminWithdrawal[] = (withdrawalsResult.data ?? []).map(
+		(row) => ({
+			accountStatus: mapAccountStatus(row.account_status),
+			amount: toNumber(row.amount),
+			amountUsd: toNumber(row.amount_usd),
+			assetSymbol: row.asset_symbol,
+			checks: (row.checks ?? []).map((check) => ({
+				label: check.label ?? "",
+				status: mapCheckStatus(check.status),
+			})),
+			createdAt: row.created_at,
+			destinationAddress: row.destination_address,
+			destinationLabel: row.destination_label,
+			fee: toNumber(row.fee),
+			id: row.id,
+			internalNotes: (row.internal_notes ?? [])
+				.map((item) => item.note ?? "")
+				.filter((value) => value.length > 0),
+			kycStatus: mapKyc(row.kyc_status),
+			netAmount: toNumber(row.net_amount),
+			network: row.network,
+			reference: row.reference,
+			risk: mapRisk(row.risk),
+			securityNotes: row.security_notes ?? [],
+			status: mapStatus(row.status),
+			timeline: (row.timeline ?? [])
+				.map((item, index) => ({
+					createdAt: item.createdAt ?? "",
+					id: item.id ?? `${row.id}-timeline-${index}`,
+					label: item.label ?? "",
+				}))
+				.filter((item) => item.createdAt && item.label)
+				.sort(
+					(left, right) =>
+						new Date(left.createdAt).getTime() -
+						new Date(right.createdAt).getTime(),
+				),
+			txHash: row.tx_hash ?? undefined,
+			userEmail: row.user_email ?? "",
+			userName: row.user_name ?? "Unknown user",
+		}),
+	);
+
+	return {
+		rules,
+		summary: {
+			amlReviewCount: toNumber(summary?.aml_review_count),
+			amlReviewUsd: toNumber(summary?.aml_review_usd),
+			averageProcessingTime: formatProcessingHours(
+				toNumber(summary?.average_processing_hours),
+			),
+			completedTodayUsd: toNumber(summary?.completed_today_usd),
+			pendingCount: toNumber(summary?.pending_count),
+			pendingUsd: toNumber(summary?.pending_usd),
+			processingCount: toNumber(summary?.processing_count),
+			processingUsd: toNumber(summary?.processing_usd),
+			rejectedTodayUsd: toNumber(summary?.rejected_today_usd),
+		},
+		withdrawals,
+	};
+}

@@ -21,7 +21,7 @@ const processSteps = [
 	},
 	{
 		description:
-			"Deposit through supported payment methods such as Bitcoin, Ethereum, Dogecoin, PayPal, cash payment, and supported e-currencies.",
+			"Deposit through supported crypto assets: Bitcoin, Ethereum, and USDT.",
 		title: "Fund your account",
 	},
 	{

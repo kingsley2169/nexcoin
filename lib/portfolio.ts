@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type PortfolioRange = "30D" | "90D" | "1Y";
 
 export type PortfolioSummary = {
@@ -50,134 +52,262 @@ export type PortfolioData = {
 	summary: PortfolioSummary;
 };
 
-export const portfolioData: PortfolioData = {
-	allocation: [
-		{ amount: 2000, color: "#9fc8c9", name: "Beginner" },
-		{ amount: 3000, color: "#5F9EA0", name: "Amateur" },
-		{ amount: 10000, color: "#3c7f80", name: "Advanced" },
-		{ amount: 3000, color: "#1f5556", name: "Pro" },
-	],
-	holdings: [
-		{
-			amount: 0.218,
-			change24h: 2.14,
-			name: "Bitcoin",
-			symbol: "BTC",
-			valueUsd: 14120,
-		},
-		{
-			amount: 2.04,
-			change24h: -0.42,
-			name: "Ethereum",
-			symbol: "ETH",
-			valueUsd: 6480,
-		},
-		{
-			amount: 28.6,
-			change24h: 3.62,
-			name: "Solana",
-			symbol: "SOL",
-			valueUsd: 4240,
-		},
-	],
-	performance: {
-		"1Y": [
-			9800, 10400, 11100, 12000, 12800, 13500, 14200, 15100, 16000, 17200,
-			18400, 20050,
-		],
-		"30D": [
-			17800, 17950, 18100, 18240, 18500, 18700, 18650, 18980, 19200, 19480,
-			19700, 20050,
-		],
-		"90D": [
-			15200, 15800, 16200, 16700, 17100, 17400, 17900, 18200, 18700, 19100,
-			19500, 20050,
-		],
-	},
-	positions: [
-		{
-			amount: 5000,
-			id: "pos-1",
-			maturityDate: "2026-04-24",
-			planName: "Advanced Plan",
-			progress: 62,
-			projectedReturn: 750,
-			startDate: "2026-04-12",
-			status: "Active",
-		},
-		{
-			amount: 1250,
-			id: "pos-2",
-			maturityDate: "2026-04-22",
-			planName: "Amateur Plan",
-			progress: 88,
-			projectedReturn: 125,
-			startDate: "2026-04-19",
-			status: "Near completion",
-		},
-		{
-			amount: 5000,
-			id: "pos-3",
-			maturityDate: "2026-04-21",
-			planName: "Advanced Plan",
-			progress: 97,
-			projectedReturn: 750,
-			startDate: "2026-04-05",
-			status: "Maturing",
-		},
-		{
-			amount: 3000,
-			id: "pos-4",
-			maturityDate: "2026-04-30",
-			planName: "Pro Plan",
-			progress: 42,
-			projectedReturn: 600,
-			startDate: "2026-04-18",
-			status: "Active",
-		},
-	],
-	profitHistory: [
-		{
-			amount: 480,
-			date: "2026-04-17",
-			id: "pr-1",
-			planName: "Advanced Plan",
-			status: "Credited",
-		},
-		{
-			amount: 125,
-			date: "2026-04-16",
-			id: "pr-2",
-			planName: "Amateur Plan",
-			status: "Credited",
-		},
-		{
-			amount: 320,
-			date: "2026-04-15",
-			id: "pr-3",
-			planName: "Advanced Plan",
-			status: "Accruing",
-		},
-		{
-			amount: 600,
-			date: "2026-04-14",
-			id: "pr-4",
-			planName: "Pro Plan",
-			status: "Pending",
-		},
-		{
-			amount: 80,
-			date: "2026-04-13",
-			id: "pr-5",
-			planName: "Beginner Plan",
-			status: "Credited",
-		},
-	],
-	summary: {
-		bestPlan: { name: "Advanced", returnPercent: 21.4 },
-		profitChangePercent: 18.6,
-		totalInvested: 18000,
-		totalProfit: 6850,
-		totalValue: 24850,
-	},
+type AllocationRow = {
+	amount_usd: number | string;
+	color_hex: string;
+	plan_name: string;
 };
+
+type ActiveInvestmentRow = {
+	amount_usd: number | string;
+	end_at: string;
+	id: string;
+	plan_name: string;
+	progress_percent: number;
+	projected_profit_usd: number | string;
+	start_at: string;
+	status: string;
+};
+
+type HoldingRow = {
+	amount: number | string;
+	change_24h_percent: number | string;
+	name: string;
+	symbol: string;
+	value_usd: number | string;
+};
+
+type ProfitRow = {
+	amount_usd: number | string;
+	display_status: string;
+	id: string;
+	occurred_at: string;
+	plan_name: string;
+};
+
+type PerformanceRow = {
+	bucket_index: number;
+	total_value_usd: number | string;
+};
+
+type BestPlanRow = {
+	name: string;
+	return_rate_percent: number | string;
+};
+
+type InvestmentTotalsRow = {
+	amount_usd: number | string;
+	profit_credited_usd: number | string;
+	projected_profit_usd: number | string;
+	status: string;
+};
+
+function toNumber(value: number | string | null | undefined) {
+	if (typeof value === "number") return value;
+	if (typeof value === "string" && value.length > 0) return Number(value);
+	return 0;
+}
+
+function mapPositionStatus(
+	rawStatus: string,
+	progress: number,
+): PortfolioPosition["status"] {
+	if (rawStatus === "matured") return "Pending";
+	if (progress >= 95) return "Maturing";
+	if (progress >= 80) return "Near completion";
+	return "Active";
+}
+
+function mapProfitStatus(value: string): PortfolioProfitEntry["status"] {
+	switch (value) {
+		case "Credited":
+			return "Credited";
+		case "Pending":
+			return "Pending";
+		default:
+			return "Accruing";
+	}
+}
+
+async function fetchPerformance(
+	supabase: SupabaseClient,
+	range: PortfolioRange,
+): Promise<number[]> {
+	const { data, error } = await supabase.rpc("user_portfolio_performance", {
+		p_range: range,
+	});
+
+	if (error) throw new Error(error.message);
+
+	const rows = (data ?? []) as PerformanceRow[];
+
+	return rows
+		.slice()
+		.sort((left, right) => left.bucket_index - right.bucket_index)
+		.map((row) => toNumber(row.total_value_usd));
+}
+
+export async function getPortfolioData(
+	supabase: SupabaseClient,
+): Promise<PortfolioData> {
+	const {
+		data: { user },
+	} = await supabase.auth.getUser();
+	if (user) {
+		await supabase.rpc("settle_matured_investments", {
+			p_target_user_id: user.id,
+		});
+	}
+
+	const [
+		allocationResult,
+		positionsResult,
+		holdingsResult,
+		profitResult,
+		investmentTotalsResult,
+		performance30D,
+		performance90D,
+		performance1Y,
+	] = await Promise.all([
+		supabase
+			.from("user_portfolio_allocation_view")
+			.select("plan_name,amount_usd,color_hex")
+			.returns<AllocationRow[]>(),
+		supabase
+			.from("user_active_investments_view")
+			.select(
+				"id,plan_name,amount_usd,projected_profit_usd,progress_percent,start_at,end_at,status",
+			)
+			.order("end_at", { ascending: true })
+			.returns<ActiveInvestmentRow[]>(),
+		supabase
+			.from("user_holdings_view")
+			.select("symbol,name,amount,value_usd,change_24h_percent")
+			.order("value_usd", { ascending: false })
+			.returns<HoldingRow[]>(),
+		supabase
+			.from("user_profit_history_view")
+			.select("id,plan_name,amount_usd,occurred_at,display_status")
+			.limit(20)
+			.returns<ProfitRow[]>(),
+		supabase
+			.from("user_investments")
+			.select("amount_usd,projected_profit_usd,profit_credited_usd,status")
+			.in("status", ["active", "matured"])
+			.returns<InvestmentTotalsRow[]>(),
+		fetchPerformance(supabase, "30D"),
+		fetchPerformance(supabase, "90D"),
+		fetchPerformance(supabase, "1Y"),
+	]);
+
+	if (allocationResult.error) throw new Error(allocationResult.error.message);
+	if (positionsResult.error) throw new Error(positionsResult.error.message);
+	if (holdingsResult.error) throw new Error(holdingsResult.error.message);
+	if (profitResult.error) throw new Error(profitResult.error.message);
+	if (investmentTotalsResult.error) {
+		throw new Error(investmentTotalsResult.error.message);
+	}
+
+	const allocation: PortfolioAllocationSegment[] = (
+		allocationResult.data ?? []
+	).map((row) => ({
+		amount: toNumber(row.amount_usd),
+		color: row.color_hex,
+		name: row.plan_name,
+	}));
+
+	const positions: PortfolioPosition[] = (positionsResult.data ?? []).map(
+		(row) => ({
+			amount: toNumber(row.amount_usd),
+			id: row.id,
+			maturityDate: row.end_at,
+			planName: row.plan_name,
+			progress: row.progress_percent,
+			projectedReturn: toNumber(row.projected_profit_usd),
+			startDate: row.start_at,
+			status: mapPositionStatus(row.status, row.progress_percent),
+		}),
+	);
+
+	const holdings: PortfolioHolding[] = (holdingsResult.data ?? []).map(
+		(row) => ({
+			amount: toNumber(row.amount),
+			change24h: toNumber(row.change_24h_percent),
+			name: row.name,
+			symbol: row.symbol,
+			valueUsd: toNumber(row.value_usd),
+		}),
+	);
+
+	const profitHistory: PortfolioProfitEntry[] = (profitResult.data ?? []).map(
+		(row) => ({
+			amount: toNumber(row.amount_usd),
+			date: row.occurred_at,
+			id: row.id,
+			planName: row.plan_name,
+			status: mapProfitStatus(row.display_status),
+		}),
+	);
+
+	const investmentTotals = investmentTotalsResult.data ?? [];
+	const totalInvested = investmentTotals.reduce(
+		(sum, row) => sum + toNumber(row.amount_usd),
+		0,
+	);
+	const totalProfit = investmentTotals.reduce((sum, row) => {
+		if (row.status === "matured") {
+			return sum + toNumber(row.profit_credited_usd);
+		}
+		return sum + toNumber(row.profit_credited_usd);
+	}, 0);
+
+	const lastValue =
+		performance30D.length > 0 ? performance30D[performance30D.length - 1] : 0;
+	const totalValue = lastValue > 0 ? lastValue : totalInvested + totalProfit;
+
+	const profitChangePercent =
+		performance30D.length > 1 && performance30D[0] > 0
+			? ((performance30D[performance30D.length - 1] - performance30D[0]) /
+					performance30D[0]) *
+				100
+			: 0;
+
+	const { data: bestPlanData } = await supabase
+		.from("user_investments")
+		.select("plan_id,investment_plans!inner(name,return_rate_percent)")
+		.in("status", ["active", "matured"])
+		.order("investment_plans(return_rate_percent)", { ascending: false })
+		.limit(1)
+		.maybeSingle<{
+			plan_id: string;
+			investment_plans: BestPlanRow | BestPlanRow[];
+		}>();
+
+	const bestPlanJoin = bestPlanData?.investment_plans;
+	const bestPlanRow = Array.isArray(bestPlanJoin) ? bestPlanJoin[0] : bestPlanJoin;
+	const bestPlan = bestPlanRow
+		? {
+				name: bestPlanRow.name,
+				returnPercent: toNumber(bestPlanRow.return_rate_percent),
+			}
+		: { name: "—", returnPercent: 0 };
+
+	return {
+		allocation,
+		holdings,
+		performance: {
+			"30D": performance30D,
+			"90D": performance90D,
+			"1Y": performance1Y,
+		},
+		positions,
+		profitHistory,
+		summary: {
+			bestPlan,
+			profitChangePercent,
+			totalInvested,
+			totalProfit,
+			totalValue,
+		},
+	};
+}

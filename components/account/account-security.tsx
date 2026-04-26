@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
 	type SecurityActivity,
 	type SecurityActivityStatus,
@@ -11,11 +12,24 @@ import {
 	type TrustedDevice,
 	type TrustedDeviceStatus,
 } from "@/lib/security";
+import {
+	changePassword,
+	disableTwoFactor,
+	enableTwoFactor,
+	regenerateBackupCodes,
+	revokeDevice,
+	updateSecuritySettings,
+} from "@/app/account/security/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type AccountSecurityProps = {
 	data: SecurityData;
+};
+
+type Notice = {
+	tone: "success" | "error";
+	message: string;
 };
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -121,49 +135,169 @@ function LockIcon({ className }: { className?: string }) {
 }
 
 export function AccountSecurity({ data }: AccountSecurityProps) {
-	const [twoFactorEnabled, setTwoFactorEnabled] = useState(data.twoFactor.enabled);
-	const [devices, setDevices] = useState(data.devices);
-	const [protections, setProtections] = useState(data.protections);
-	const [passwordNotice, setPasswordNotice] = useState(false);
-	const [backupNotice, setBackupNotice] = useState(false);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const [notice, setNotice] = useState<Notice | null>(null);
+	const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+	const [currentPassword, setCurrentPassword] = useState("");
+	const [newPassword, setNewPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
+	const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+	const [showNewPassword, setShowNewPassword] = useState(false);
+	const [passwordModalNotice, setPasswordModalNotice] = useState<Notice | null>(null);
+
+	useEffect(() => {
+		if (!notice) {
+			return;
+		}
+
+		const id = window.setTimeout(() => setNotice(null), 3000);
+		return () => window.clearTimeout(id);
+	}, [notice]);
 
 	const summary = useMemo(() => {
-		const reviewDevices = devices.filter(
+		const reviewDevices = data.devices.filter(
 			(device) => device.status === "Review",
 		).length;
-		const enabledProtections = protections.filter(
+		const enabledProtections = data.protections.filter(
 			(protection) => protection.enabled,
 		).length;
 
 		return {
 			enabledProtections,
 			reviewDevices,
-			trustedDevices: devices.length,
+			trustedDevices: data.devices.length,
 		};
-	}, [devices, protections]);
+	}, [data.devices, data.protections]);
 
-	const handleRemoveDevice = (id: string) => {
-		setDevices((current) => current.filter((device) => device.id !== id));
+	const handleToggleTwoFactor = () => {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = data.twoFactor.enabled
+				? await disableTwoFactor()
+				: await enableTwoFactor();
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: data.twoFactor.enabled
+					? "Two-factor authentication disabled."
+					: "Two-factor authentication enabled.",
+			});
+			router.refresh();
+		});
+	};
+
+	const handleRegenerateBackupCodes = () => {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await regenerateBackupCodes();
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: "Backup codes regenerated.",
+			});
+			router.refresh();
+		});
 	};
 
 	const handleToggleProtection = (id: string) => {
-		setProtections((current) =>
-			current.map((protection) =>
-				protection.id === id && !protection.isLocked
-					? { ...protection, enabled: !protection.enabled }
-					: protection,
-			),
-		);
+		if (isPending) return;
+
+		const protection = data.protections.find((item) => item.id === id);
+		if (!protection || protection.isLocked) {
+			return;
+		}
+
+		startTransition(async () => {
+			const result = await updateSecuritySettings({
+				confirmNewWithdrawalAddresses:
+					id === "address-confirmation"
+						? !protection.enabled
+						: undefined,
+				newDeviceAlerts:
+					id === "new-device-alerts"
+						? !protection.enabled
+						: undefined,
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: "Security settings updated.",
+			});
+			router.refresh();
+		});
 	};
 
-	const handlePasswordAction = () => {
-		setPasswordNotice(true);
-		window.setTimeout(() => setPasswordNotice(false), 3000);
+	const handleRevokeDevice = (id: string) => {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await revokeDevice(id);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({ tone: "success", message: "Device removed." });
+			router.refresh();
+		});
 	};
 
-	const handleBackupAction = () => {
-		setBackupNotice(true);
-		window.setTimeout(() => setBackupNotice(false), 3000);
+	const handleChangePasswordSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+
+		if (newPassword !== confirmPassword) {
+			setPasswordModalNotice({
+				tone: "error",
+				message: "New passwords do not match.",
+			});
+			return;
+		}
+
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await changePassword(currentPassword, newPassword);
+
+			if (!result.ok) {
+				setPasswordModalNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setPasswordModalNotice({
+				tone: "success",
+				message: "Password changed successfully.",
+			});
+
+			window.setTimeout(() => {
+				setIsPasswordModalOpen(false);
+				setCurrentPassword("");
+				setNewPassword("");
+				setConfirmPassword("");
+				setShowCurrentPassword(false);
+				setShowNewPassword(false);
+				setPasswordModalNotice(null);
+				router.refresh();
+			}, 2000);
+		});
 	};
 
 	return (
@@ -179,31 +313,41 @@ export function AccountSecurity({ data }: AccountSecurityProps) {
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-3">
-					<Button type="button" onClick={handlePasswordAction}>
+					<Button
+						type="button"
+						onClick={() => setIsPasswordModalOpen(true)}
+					>
 						Change Password
 					</Button>
 					<Button
 						type="button"
 						variant="outline"
-						onClick={() => setTwoFactorEnabled((current) => !current)}
+						onClick={handleToggleTwoFactor}
 					>
-						{twoFactorEnabled ? "Manage 2FA" : "Enable 2FA"}
+						{data.twoFactor.enabled ? "Disable 2FA" : "Enable 2FA"}
 					</Button>
 				</div>
 			</header>
 
-			{passwordNotice ? (
-				<div className="rounded-lg border border-[#d7e5e3] bg-white p-4 text-sm font-medium text-[#3c7f80] shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
-					Password change flow is ready for backend connection.
+			{notice ? (
+				<div
+					className={cn(
+						"rounded-lg border p-4 text-sm font-medium shadow-[0_18px_50px_rgba(87,99,99,0.08)]",
+						notice.tone === "success"
+							? "border-[#d7e5e3] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#fde8e8] bg-[#fff1f0] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
 				</div>
 			) : null}
 
 			<section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<SummaryCard
-					hint={twoFactorEnabled ? data.twoFactor.method : "Not enabled"}
+					hint={data.twoFactor.enabled ? data.twoFactor.method : "Not enabled"}
 					label="2FA status"
-					value={twoFactorEnabled ? "Enabled" : "Disabled"}
-					tone={twoFactorEnabled ? "positive" : "warning"}
+					value={data.twoFactor.enabled ? "Enabled" : "Disabled"}
+					tone={data.twoFactor.enabled ? "positive" : "warning"}
 				/>
 				<SummaryCard
 					hint={`Last changed ${formatDate(data.password.lastChangedAt)}`}
@@ -218,7 +362,7 @@ export function AccountSecurity({ data }: AccountSecurityProps) {
 					tone={summary.reviewDevices > 0 ? "danger" : "neutral"}
 				/>
 				<SummaryCard
-					hint={`${summary.enabledProtections}/${protections.length} protections on`}
+					hint={`${summary.enabledProtections}/${data.protections.length} protections on`}
 					label="Security score"
 					value={data.score}
 					tone={data.score === "Strong" ? "positive" : "warning"}
@@ -228,27 +372,26 @@ export function AccountSecurity({ data }: AccountSecurityProps) {
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
 				<div className="space-y-6">
 					<TwoFactorCard
-						backupNotice={backupNotice}
-						enabled={twoFactorEnabled}
+						enabled={data.twoFactor.enabled}
 						method={data.twoFactor.method}
-						onBackupAction={handleBackupAction}
-						onToggle={() => setTwoFactorEnabled((current) => !current)}
 						recoveryEmail={data.twoFactor.recoveryEmail}
+						onBackupAction={handleRegenerateBackupCodes}
+						onToggle={handleToggleTwoFactor}
 						backupCodesGeneratedAt={data.twoFactor.backupCodesGeneratedAt}
 					/>
 					<PasswordCard
 						cooldownHours={data.password.withdrawalCooldownHours}
 						lastChangedAt={data.password.lastChangedAt}
-						onChangePassword={handlePasswordAction}
+						onChangePassword={() => setIsPasswordModalOpen(true)}
 						strength={data.password.strength}
 					/>
 					<ProtectionCard
 						onToggle={handleToggleProtection}
-						protections={protections}
+						protections={data.protections}
 					/>
 					<TrustedDevicesCard
-						devices={devices}
-						onRemove={handleRemoveDevice}
+						devices={data.devices}
+						onRemove={handleRevokeDevice}
 					/>
 				</div>
 
@@ -257,6 +400,149 @@ export function AccountSecurity({ data }: AccountSecurityProps) {
 					<RecommendationsCard recommendations={data.recommendations} />
 				</div>
 			</div>
+
+			{isPasswordModalOpen ? (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+					<div className="w-full max-w-sm rounded-lg border border-[#d7e5e3] bg-white shadow-lg">
+						<div className="border-b border-[#d7e5e3] p-5">
+							<h2 className="text-lg font-semibold text-[#576363]">
+								Change password
+							</h2>
+							<p className="mt-1 text-sm text-[#5d6163]">
+								Enter your current password and a new password.
+							</p>
+						</div>
+						<form onSubmit={handleChangePasswordSubmit} className="p-5 space-y-4">						{passwordModalNotice ? (
+							<div
+								className={cn(
+									"rounded-lg border p-3 text-sm font-medium",
+									passwordModalNotice.tone === "success"
+										? "border-[#d7e5e3] bg-[#e6f3ec] text-[#2e8f5b]"
+										: "border-[#fde8e8] bg-[#fff1f0] text-[#b1423a]",
+								)}
+							>
+								{passwordModalNotice.message}
+							</div>
+						) : null}							<div>
+								<label className="block text-sm font-medium text-[#576363]">
+									Current password
+								</label>
+								<div className="relative mt-2">
+									<input
+										type={showCurrentPassword ? "text" : "password"}
+										value={currentPassword}
+										onChange={(e) => setCurrentPassword(e.target.value)}
+										className="w-full rounded-md border border-[#cfdcda] bg-white px-4 py-2 text-sm text-[#576363] outline-none transition focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+										placeholder="Enter current password"
+										disabled={isPending}
+									/>
+									<button
+										type="button"
+										onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+										className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5d6163] hover:text-[#3c7f80]"
+										aria-label={
+											showCurrentPassword ? "Hide password" : "Show password"
+										}
+									>
+										{showCurrentPassword ? (
+											<EyeOffIcon className="h-4 w-4" />
+										) : (
+											<EyeIcon className="h-4 w-4" />
+										)}
+									</button>
+								</div>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-[#576363]">
+									New password
+								</label>
+								<div className="relative mt-2">
+									<input
+										type={showNewPassword ? "text" : "password"}
+										value={newPassword}
+										onChange={(e) => setNewPassword(e.target.value)}
+										className="w-full rounded-md border border-[#cfdcda] bg-white px-4 py-2 text-sm text-[#576363] outline-none transition focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+										placeholder="Enter new password (min 8 characters)"
+										disabled={isPending}
+									/>
+									<button
+										type="button"
+										onClick={() => setShowNewPassword(!showNewPassword)}
+										className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5d6163] hover:text-[#3c7f80]"
+										aria-label={
+											showNewPassword ? "Hide password" : "Show password"
+										}
+									>
+										{showNewPassword ? (
+											<EyeOffIcon className="h-4 w-4" />
+										) : (
+											<EyeIcon className="h-4 w-4" />
+										)}
+									</button>
+								</div>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-[#576363]">
+									Confirm new password
+								</label>
+								<div className="relative mt-2">
+									<input
+										type={showNewPassword ? "text" : "password"}
+										value={confirmPassword}
+										onChange={(e) => setConfirmPassword(e.target.value)}
+										className="w-full rounded-md border border-[#cfdcda] bg-white px-4 py-2 text-sm text-[#576363] outline-none transition focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+										placeholder="Confirm new password"
+										disabled={isPending}
+									/>
+									<button
+										type="button"
+										onClick={() => setShowNewPassword(!showNewPassword)}
+										className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5d6163] hover:text-[#3c7f80]"
+										aria-label={
+											showNewPassword ? "Hide password" : "Show password"
+										}
+									>
+										{showNewPassword ? (
+											<EyeOffIcon className="h-4 w-4" />
+										) : (
+											<EyeIcon className="h-4 w-4" />
+										)}
+									</button>
+								</div>
+							</div>
+
+							<div className="flex gap-3 border-t border-[#d7e5e3] pt-4">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setIsPasswordModalOpen(false);
+										setCurrentPassword("");
+										setNewPassword("");
+										setConfirmPassword("");
+										setShowCurrentPassword(false);
+										setShowNewPassword(false);
+										setPasswordModalNotice(null);
+									}}
+									disabled={isPending}
+									className="flex-1"
+								>
+									Cancel
+								</Button>
+								<Button
+									type="submit"
+									disabled={isPending || !currentPassword || !newPassword || !confirmPassword}
+									className="flex-1"
+								>
+									{isPending ? "Updating…" : "Update password"}
+								</Button>
+							</div>
+						</form>
+					</div>
+				</div>
+			) : null}
 		</div>
 	);
 }
@@ -293,7 +579,6 @@ function SummaryCard({
 
 function TwoFactorCard({
 	backupCodesGeneratedAt,
-	backupNotice,
 	enabled,
 	method,
 	onBackupAction,
@@ -301,7 +586,6 @@ function TwoFactorCard({
 	recoveryEmail,
 }: {
 	backupCodesGeneratedAt: string;
-	backupNotice: boolean;
 	enabled: boolean;
 	method: string;
 	onBackupAction: () => void;
@@ -326,7 +610,7 @@ function TwoFactorCard({
 					</div>
 				</div>
 				<Button type="button" variant="outline" onClick={onToggle}>
-					{enabled ? "Manage 2FA" : "Enable 2FA"}
+					{enabled ? "Disable 2FA" : "Enable 2FA"}
 				</Button>
 			</div>
 
@@ -347,11 +631,6 @@ function TwoFactorCard({
 					Regenerate Codes
 				</Button>
 			</div>
-			{backupNotice ? (
-				<p className="mt-3 text-sm font-medium text-[#3c7f80]">
-					Backup code flow is ready for backend connection.
-				</p>
-			) : null}
 		</section>
 	);
 }
@@ -516,8 +795,7 @@ function DeviceRow({
 					{device.browser} - {device.location}
 				</p>
 				<p className="mt-1 text-xs text-[#5d6163]">
-					Last active {formatDateTime(device.lastActiveAt)} - IP{" "}
-					{device.ipAddress}
+					Last active {formatDateTime(device.lastActiveAt)} - IP {device.ipAddress}
 				</p>
 			</div>
 			<Button
@@ -672,5 +950,41 @@ function ToggleButton({
 				)}
 			/>
 		</button>
+	);
+}
+
+function EyeIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			className={className}
+			aria-hidden="true"
+			fill="none"
+			stroke="currentColor"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			strokeWidth="2"
+		>
+			<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+			<circle cx="12" cy="12" r="3" />
+		</svg>
+	);
+}
+
+function EyeOffIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			className={className}
+			aria-hidden="true"
+			fill="none"
+			stroke="currentColor"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			strokeWidth="2"
+		>
+			<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+			<line x1="1" y1="1" x2="23" y2="23" />
+		</svg>
 	);
 }

@@ -1,14 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
 	type AdminDeposit,
-	type AdminDepositMethod,
 	type AdminDepositsManagementData,
 	type AdminDepositRisk,
 	type AdminDepositStatus,
+	type AdminReceivingWallet,
+	type AdminReceivingWalletAsset,
 } from "@/lib/admin-deposits-management";
+import {
+	addDepositNote,
+	createReceivingWallet,
+	removeReceivingWallet,
+	setReceivingWalletActive,
+	updateDepositStatus,
+} from "@/app/nexcoin-admin-priv/deposits-management/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +26,6 @@ type AdminDepositsManagementProps = {
 };
 
 type StatusFilter = AdminDepositStatus | "all";
-type MethodFilter = AdminDepositMethod | "all";
 type RiskFilter = AdminDepositRisk | "all";
 
 const statusFilters: { label: string; value: StatusFilter }[] = [
@@ -29,20 +37,33 @@ const statusFilters: { label: string; value: StatusFilter }[] = [
 	{ label: "Rejected", value: "Rejected" },
 ];
 
-const methodFilters: { label: string; value: MethodFilter }[] = [
-	{ label: "All methods", value: "all" },
-	{ label: "Crypto", value: "Crypto" },
-	{ label: "PayPal", value: "PayPal" },
-	{ label: "Cash", value: "Cash" },
-	{ label: "E-currency", value: "E-currency" },
-];
-
 const riskFilters: { label: string; value: RiskFilter }[] = [
 	{ label: "All risk", value: "all" },
 	{ label: "High", value: "High" },
 	{ label: "Medium", value: "Medium" },
 	{ label: "Low", value: "Low" },
 ];
+
+const receivingAssets: AdminReceivingWalletAsset[] = ["BTC", "ETH", "USDT"];
+
+const defaultNetworkByAsset: Record<AdminReceivingWalletAsset, string> = {
+	BTC: "Bitcoin",
+	ETH: "Ethereum",
+	USDT: "TRC-20",
+};
+
+const assetDisplayName: Record<AdminReceivingWalletAsset, string> = {
+	BTC: "Bitcoin",
+	ETH: "Ethereum",
+	USDT: "Tether (USDT)",
+};
+
+type ReceivingWalletDraft = {
+	address: string;
+	asset: AdminReceivingWalletAsset;
+	label: string;
+	network: string;
+};
 
 const statusClasses: Record<AdminDepositStatus, string> = {
 	Confirming: "bg-[#fff1e0] text-[#a66510]",
@@ -104,27 +125,107 @@ function SearchIcon({ className }: { className?: string }) {
 }
 
 export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) {
-	const [deposits, setDeposits] = useState(data.deposits);
-	const [selectedId, setSelectedId] = useState(data.deposits[0]?.id ?? "");
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const wallets = data.receivingWallets;
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [isReviewOpen, setIsReviewOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-	const [methodFilter, setMethodFilter] = useState<MethodFilter>("all");
 	const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
 	const [note, setNote] = useState("");
 	const [noteSaved, setNoteSaved] = useState(false);
+	const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+	const [notice, setNotice] = useState<
+		{ tone: "error" | "success"; message: string } | null
+	>(null);
 
-	const selectedDeposit =
-		deposits.find((deposit) => deposit.id === selectedId) ?? deposits[0];
+	const addWallet = (draft: ReceivingWalletDraft) => {
+		if (isPending) return;
+
+		const assetMap: Record<AdminReceivingWalletAsset, "btc" | "eth" | "usdt"> = {
+			BTC: "btc",
+			ETH: "eth",
+			USDT: "usdt",
+		};
+
+		startTransition(async () => {
+			const result = await createReceivingWallet({
+				address: draft.address,
+				asset: assetMap[draft.asset],
+				label: draft.label.trim() || `${draft.asset} wallet`,
+				network: draft.network,
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({ tone: "success", message: "Receiving wallet added." });
+			setIsWalletModalOpen(false);
+			router.refresh();
+		});
+	};
+
+	const removeWallet = (id: string) => {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await removeReceivingWallet(id);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({ tone: "success", message: "Receiving wallet removed." });
+			router.refresh();
+		});
+	};
+
+	const toggleWalletActive = (id: string) => {
+		if (isPending) return;
+
+		const wallet = wallets.find((item) => item.id === id);
+		if (!wallet) return;
+
+		const nextActive = !wallet.isActive;
+
+		startTransition(async () => {
+			const result = await setReceivingWalletActive(id, nextActive);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: `Wallet ${nextActive ? "activated" : "disabled"}.`,
+			});
+			router.refresh();
+		});
+	};
+
+	const selectedDeposit = data.deposits.find((deposit) => deposit.id === selectedId);
+
+	const openReview = (id: string) => {
+		setSelectedId(id);
+		setNote("");
+		setNoteSaved(false);
+		setIsReviewOpen(true);
+	};
+
+	const closeReview = () => {
+		setIsReviewOpen(false);
+	};
 
 	const filteredDeposits = useMemo(() => {
 		const trimmed = query.trim().toLowerCase();
 
-		return deposits.filter((deposit) => {
+		return data.deposits.filter((deposit) => {
 			if (statusFilter !== "all" && deposit.status !== statusFilter) {
-				return false;
-			}
-
-			if (methodFilter !== "all" && deposit.method !== methodFilter) {
 				return false;
 			}
 
@@ -140,6 +241,7 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 					deposit.assetSymbol,
 					deposit.network,
 					deposit.txHash ?? "",
+					deposit.senderAddress ?? "",
 					deposit.walletAddress ?? "",
 				]
 					.join(" ")
@@ -152,7 +254,7 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 
 			return true;
 		});
-	}, [deposits, methodFilter, query, riskFilter, statusFilter]);
+	}, [data.deposits, query, riskFilter, statusFilter]);
 
 	const visibleTotal = useMemo(
 		() => filteredDeposits.reduce((sum, deposit) => sum + deposit.amountUsd, 0),
@@ -160,43 +262,59 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 	);
 
 	const updateStatus = (id: string, status: AdminDepositStatus) => {
-		setDeposits((current) =>
-			current.map((deposit) =>
-				deposit.id === id
-					? {
-							...deposit,
-							status,
-							timeline: [
-								{
-									createdAt: new Date("2026-04-22T10:45:00Z").toISOString(),
-									id: `${deposit.id}-${status}`,
-									label: `Status changed to ${status}`,
-								},
-								...deposit.timeline,
-							],
-						}
-					: deposit,
-			),
-		);
+		if (isPending) return;
+
+		const rpcStatus: Record<
+			AdminDepositStatus,
+			"confirming" | "credited" | "needs_review" | "pending" | "rejected"
+		> = {
+			Confirming: "confirming",
+			Credited: "credited",
+			"Needs Review": "needs_review",
+			Pending: "pending",
+			Rejected: "rejected",
+		};
+
+		startTransition(async () => {
+			const result = await updateDepositStatus({
+				depositId: id,
+				status: rpcStatus[status],
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: `Deposit updated to ${status}.`,
+			});
+			router.refresh();
+		});
 	};
 
 	const saveNote = () => {
 		const trimmed = note.trim();
 
-		if (!selectedDeposit || !trimmed) {
+		if (!selectedDeposit || !trimmed || isPending) {
 			return;
 		}
 
-		setDeposits((current) =>
-			current.map((deposit) =>
-				deposit.id === selectedDeposit.id
-					? { ...deposit, internalNotes: [trimmed, ...deposit.internalNotes] }
-					: deposit,
-			),
-		);
-		setNote("");
-		setNoteSaved(true);
-		window.setTimeout(() => setNoteSaved(false), 2500);
+		startTransition(async () => {
+			const result = await addDepositNote(selectedDeposit.id, trimmed);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNote("");
+			setNotice({ tone: "success", message: "Note saved." });
+			setNoteSaved(true);
+			router.refresh();
+			window.setTimeout(() => setNoteSaved(false), 2500);
+		});
 	};
 
 	return (
@@ -207,8 +325,8 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 						Deposits Management
 					</h1>
 					<p className="mt-1 max-w-3xl text-sm leading-6 text-[#5d6163]">
-						Review incoming deposits, confirmations, manual payment proofs, and
-						unmatched funding requests.
+						Review incoming crypto deposits, confirmations, receiving wallets,
+						and unmatched funding requests.
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-3">
@@ -216,7 +334,7 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 						Pending Queue
 					</Button>
 					<Link
-						href="/nexcoin-admin-priv/support-management"
+						href="/nexcoin-admin-priv/support"
 						className={buttonVariants({ size: "md", variant: "outline" })}
 					>
 						Open Support
@@ -224,7 +342,20 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 				</div>
 			</header>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
+			{notice ? (
+				<div
+					className={cn(
+						"rounded-lg border p-4 text-sm font-medium shadow-[0_18px_50px_rgba(87,99,99,0.08)]",
+						notice.tone === "success"
+							? "border-[#c7e4d5] bg-[#f1fbf6] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
+
+			<section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 				<SummaryCard
 					hint={`${data.summary.pendingCount} requests`}
 					label="Pending deposits"
@@ -232,15 +363,15 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 					tone="warning"
 				/>
 				<SummaryCard
-					hint={`${data.summary.confirmingCryptoCount} crypto deposits`}
-					label="Confirming crypto"
-					value={formatUsd(data.summary.confirmingCryptoUsd)}
+					hint={`${data.summary.confirmingCount} awaiting confirmations`}
+					label="Confirming"
+					value={formatUsd(data.summary.confirmingUsd)}
 					tone="warning"
 				/>
 				<SummaryCard
-					hint={`${data.summary.manualReviewCount} payment proofs`}
-					label="Manual review"
-					value={formatUsd(data.summary.manualReviewUsd)}
+					hint={`${data.summary.needsReviewCount} flagged deposits`}
+					label="Needs review"
+					value={formatUsd(data.summary.needsReviewUsd)}
 					tone="danger"
 				/>
 				<SummaryCard
@@ -261,7 +392,14 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 				/>
 			</section>
 
-			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+			<ReceivingWalletsCard
+				onAdd={() => setIsWalletModalOpen(true)}
+				onRemove={removeWallet}
+				onToggleActive={toggleWalletActive}
+				wallets={wallets}
+			/>
+
+			<div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
 				<div className="space-y-6">
 					<section className="rounded-lg border border-[#d7e5e3] bg-white shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
 						<div className="border-b border-[#d7e5e3] p-5">
@@ -291,27 +429,28 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 								</div>
 							</div>
 
-							<FilterGroup
-								filters={statusFilters}
-								onChange={setStatusFilter}
-								value={statusFilter}
-							/>
-							<FilterGroup
-								filters={methodFilters}
-								onChange={setMethodFilter}
-								value={methodFilter}
-							/>
-							<FilterGroup
-								filters={riskFilters}
-								onChange={setRiskFilter}
-								value={riskFilter}
-							/>
+							<div className="mt-5 flex flex-col gap-3">
+								<FilterGroup
+									label="Status"
+									filters={statusFilters}
+									onChange={setStatusFilter}
+									value={statusFilter}
+								/>
+								<FilterGroup
+									label="Risk"
+									filters={riskFilters}
+									onChange={setRiskFilter}
+									value={riskFilter}
+								/>
+							</div>
 						</div>
 
 						<div className="divide-y divide-[#eef1f1]">
 							{filteredDeposits.length === 0 ? (
 								<div className="p-8 text-center">
-									<p className="font-semibold text-[#576363]">No deposits found</p>
+									<p className="font-semibold text-[#576363]">
+										No deposits found
+									</p>
 									<p className="mt-2 text-sm text-[#5d6163]">
 										Adjust filters or search terms.
 									</p>
@@ -321,9 +460,9 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 									<DepositRow
 										key={deposit.id}
 										deposit={deposit}
-										onSelect={setSelectedId}
+										onReview={openReview}
 										onStatusChange={updateStatus}
-										selected={selectedDeposit?.id === deposit.id}
+										isSubmitting={isPending}
 									/>
 								))
 							)}
@@ -331,20 +470,31 @@ export function AdminDepositsManagement({ data }: AdminDepositsManagementProps) 
 					</section>
 				</div>
 
-				<div className="space-y-6">
-					{selectedDeposit ? (
-						<DepositDetail
-							deposit={selectedDeposit}
-							note={note}
-							noteSaved={noteSaved}
-							onNoteChange={setNote}
-							onSaveNote={saveNote}
-							onStatusChange={updateStatus}
-						/>
-					) : null}
+				<div className="space-y-6 2xl:sticky 2xl:top-24 2xl:self-start">
 					<RulesCard rules={data.rules} />
 				</div>
 			</div>
+
+			{isReviewOpen && selectedDeposit ? (
+				<DepositReviewModal deposit={selectedDeposit} onClose={closeReview}>
+					<DepositDetail
+						deposit={selectedDeposit}
+						isSubmitting={isPending}
+						note={note}
+						noteSaved={noteSaved}
+						onNoteChange={setNote}
+						onSaveNote={saveNote}
+						onStatusChange={updateStatus}
+					/>
+				</DepositReviewModal>
+			) : null}
+
+			{isWalletModalOpen ? (
+				<ReceivingWalletModal
+					onAdd={addWallet}
+					onClose={() => setIsWalletModalOpen(false)}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -381,15 +531,20 @@ function SummaryCard({
 
 function FilterGroup<T extends string>({
 	filters,
+	label,
 	onChange,
 	value,
 }: {
 	filters: { label: string; value: T }[];
+	label: string;
 	onChange: (value: T) => void;
 	value: T;
 }) {
 	return (
-		<div className="mt-3 flex flex-wrap gap-2">
+		<div className="flex flex-wrap items-center gap-2">
+			<span className="mr-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#5F9EA0]">
+				{label}
+			</span>
 			{filters.map((filter) => (
 				<button
 					key={filter.value}
@@ -411,30 +566,27 @@ function FilterGroup<T extends string>({
 
 function DepositRow({
 	deposit,
-	onSelect,
+	isSubmitting,
+	onReview,
 	onStatusChange,
-	selected,
 }: {
 	deposit: AdminDeposit;
-	onSelect: (id: string) => void;
+	isSubmitting: boolean;
+	onReview: (id: string) => void;
 	onStatusChange: (id: string, status: AdminDepositStatus) => void;
-	selected: boolean;
 }) {
 	return (
 		<div
 			role="button"
 			tabIndex={0}
-			onClick={() => onSelect(deposit.id)}
+			onClick={() => onReview(deposit.id)}
 			onKeyDown={(event) => {
 				if (event.key === "Enter" || event.key === " ") {
 					event.preventDefault();
-					onSelect(deposit.id);
+					onReview(deposit.id);
 				}
 			}}
-			className={cn(
-				"grid cursor-pointer gap-4 p-5 transition hover:bg-[#f7faf9] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5F9EA0]/15 xl:grid-cols-[minmax(260px,1fr)_minmax(180px,0.7fr)_minmax(180px,0.7fr)_auto]",
-				selected && "bg-[#f7faf9]",
-			)}
+			className="grid cursor-pointer gap-5 p-5 transition hover:bg-[#f7faf9] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5F9EA0]/15 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]"
 		>
 			<div className="min-w-0">
 				<div className="flex flex-wrap items-center gap-2">
@@ -448,28 +600,34 @@ function DepositRow({
 						{deposit.status}
 					</span>
 				</div>
-				<p className="mt-1 truncate text-sm text-[#5d6163]">
+				<p className="mt-2 truncate text-sm text-[#5d6163]">
 					{deposit.userName} - {deposit.userEmail}
+				</p>
+				<p className="mt-1 text-xs text-[#5d6163]">
+					{deposit.assetSymbol} - {deposit.network}
 				</p>
 				<p className="mt-1 text-xs text-[#5d6163]">
 					Created {formatDateTime(deposit.createdAt)}
 				</p>
 			</div>
 			<div>
-				<p className="font-semibold text-[#576363]">
+				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5F9EA0]">
+					Amount
+				</p>
+				<p className="mt-2 font-semibold text-[#576363]">
 					{formatAssetAmount(deposit.amount)} {deposit.assetSymbol}
 				</p>
 				<p className="mt-1 text-sm text-[#5d6163]">
 					{formatUsd(deposit.amountUsd)}
 				</p>
-				<p className="mt-1 text-xs text-[#5d6163]">
-					{deposit.method} - {deposit.network}
-				</p>
 			</div>
 			<div>
+				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5F9EA0]">
+					Signals
+				</p>
 				<span
 					className={cn(
-						"rounded-full px-2.5 py-1 text-xs font-semibold",
+						"mt-2 inline-block rounded-full px-2.5 py-1 text-xs font-semibold",
 						riskClasses[deposit.risk],
 					)}
 				>
@@ -478,10 +636,22 @@ function DepositRow({
 				<p className="mt-2 text-sm text-[#5d6163]">
 					{deposit.confirmationsRequired > 0
 						? `${deposit.confirmations}/${deposit.confirmationsRequired} confirmations`
-						: deposit.paymentProofStatus}
+						: "Awaiting network confirmation"}
 				</p>
 			</div>
-			<div className="flex flex-wrap items-start gap-2 xl:justify-end">
+			<div className="flex flex-wrap items-start gap-2 sm:col-span-2 xl:col-span-1 xl:justify-end">
+				<Button
+					type="button"
+					size="sm"
+					variant="outline"
+					onClick={(event) => {
+						event.stopPropagation();
+						onStatusChange(deposit.id, "Confirming");
+					}}
+					disabled={deposit.status === "Confirming" || isSubmitting}
+				>
+					Mark Confirming
+				</Button>
 				<Button
 					type="button"
 					size="sm"
@@ -489,9 +659,9 @@ function DepositRow({
 						event.stopPropagation();
 						onStatusChange(deposit.id, "Credited");
 					}}
-					disabled={deposit.status === "Credited"}
+					disabled={deposit.status === "Credited" || isSubmitting}
 				>
-					Credit
+					{isSubmitting ? "Saving..." : "Credit"}
 				</Button>
 				<Button
 					type="button"
@@ -501,7 +671,7 @@ function DepositRow({
 						event.stopPropagation();
 						onStatusChange(deposit.id, "Rejected");
 					}}
-					disabled={deposit.status === "Rejected"}
+					disabled={deposit.status === "Rejected" || isSubmitting}
 				>
 					Reject
 				</Button>
@@ -512,6 +682,7 @@ function DepositRow({
 
 function DepositDetail({
 	deposit,
+	isSubmitting,
 	note,
 	noteSaved,
 	onNoteChange,
@@ -519,6 +690,7 @@ function DepositDetail({
 	onStatusChange,
 }: {
 	deposit: AdminDeposit;
+	isSubmitting: boolean;
 	note: string;
 	noteSaved: boolean;
 	onNoteChange: (value: string) => void;
@@ -549,7 +721,7 @@ function DepositDetail({
 			<div className="space-y-5 p-5">
 				<div className="grid gap-3">
 					<DetailRow label="User" value={`${deposit.userName} - ${deposit.userEmail}`} />
-					<DetailRow label="Method" value={`${deposit.method} - ${deposit.network}`} />
+					<DetailRow label="Asset/network" value={`${deposit.assetSymbol} - ${deposit.network}`} />
 					<DetailRow
 						label="Amount"
 						value={`${formatAssetAmount(deposit.amount)} ${deposit.assetSymbol} (${formatUsd(deposit.amountUsd)})`}
@@ -559,11 +731,14 @@ function DepositDetail({
 						value={
 							deposit.confirmationsRequired > 0
 								? `${deposit.confirmations}/${deposit.confirmationsRequired}`
-								: "Manual review"
+								: "Awaiting network confirmation"
 						}
 					/>
-					<DetailRow label="Payment proof" value={deposit.paymentProofStatus} />
 					{deposit.txHash ? <DetailRow label="Tx hash" value={deposit.txHash} /> : null}
+					<DetailRow
+						label="Sender wallet"
+						value={deposit.senderAddress || "Not provided on this deposit"}
+					/>
 					{deposit.walletAddress ? (
 						<DetailRow label="Wallet" value={deposit.walletAddress} />
 					) : null}
@@ -586,14 +761,20 @@ function DepositDetail({
 				<div>
 					<p className="font-semibold text-[#576363]">Timeline</p>
 					<div className="mt-3 space-y-3">
-						{deposit.timeline.map((item) => (
-							<div key={item.id} className="border-l-2 border-[#d7e5e3] pl-3">
-								<p className="text-sm font-semibold text-[#576363]">{item.label}</p>
-								<p className="mt-1 text-xs text-[#5d6163]">
-									{formatDateTime(item.createdAt)}
-								</p>
+						{deposit.timeline.length > 0 ? (
+							deposit.timeline.map((item) => (
+								<div key={item.id} className="border-l-2 border-[#d7e5e3] pl-3">
+									<p className="text-sm font-semibold text-[#576363]">{item.label}</p>
+									<p className="mt-1 text-xs text-[#5d6163]">
+										{formatDateTime(item.createdAt)}
+									</p>
+								</div>
+							))
+						) : (
+							<div className="rounded-lg border border-[#eef1f1] bg-[#f7faf9] p-3 text-sm text-[#5d6163]">
+								No timeline events have been recorded for this deposit yet.
 							</div>
-						))}
+						)}
 					</div>
 				</div>
 
@@ -621,7 +802,7 @@ function DepositDetail({
 						placeholder="Add internal staff note..."
 					/>
 					<Button type="button" className="mt-3" onClick={onSaveNote}>
-						Save Note
+						{isSubmitting ? "Saving..." : "Save Note"}
 					</Button>
 					{noteSaved ? (
 						<p className="mt-2 text-sm font-medium text-[#3c7f80]">Note saved.</p>
@@ -629,24 +810,39 @@ function DepositDetail({
 				</div>
 
 				<div className="grid gap-2 sm:grid-cols-3">
-					<Button type="button" onClick={() => onStatusChange(deposit.id, "Credited")}>
-						Credit
+					<Button
+						type="button"
+						variant="outline"
+						onClick={() => onStatusChange(deposit.id, "Confirming")}
+						disabled={isSubmitting}
+					>
+						Mark Confirming
+					</Button>
+					<Button
+						type="button"
+						onClick={() => onStatusChange(deposit.id, "Credited")}
+						disabled={isSubmitting}
+					>
+						{isSubmitting ? "Saving..." : "Credit"}
 					</Button>
 					<Button
 						type="button"
 						variant="outline"
 						onClick={() => onStatusChange(deposit.id, "Rejected")}
+						disabled={isSubmitting}
 					>
 						Reject
 					</Button>
-					<Button
-						type="button"
-						variant="secondary"
-						onClick={() => onStatusChange(deposit.id, "Needs Review")}
-					>
-						Request Info
-					</Button>
 				</div>
+				<Button
+					type="button"
+					variant="secondary"
+					onClick={() => onStatusChange(deposit.id, "Needs Review")}
+					disabled={isSubmitting}
+					className="w-full sm:w-auto"
+				>
+					Request Info
+				</Button>
 			</div>
 		</section>
 	);
@@ -668,6 +864,256 @@ function RulesCard({ rules }: { rules: string[] }) {
 	);
 }
 
+function ReceivingWalletsCard({
+	onAdd,
+	onRemove,
+	onToggleActive,
+	wallets,
+}: {
+	onAdd: () => void;
+	onRemove: (id: string) => void;
+	onToggleActive: (id: string) => void;
+	wallets: AdminReceivingWallet[];
+}) {
+	return (
+		<section className="rounded-lg border border-[#d7e5e3] bg-white shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
+			<div className="flex flex-col gap-4 border-b border-[#d7e5e3] p-5 xl:flex-row xl:items-start xl:justify-between">
+				<div>
+					<h2 className="text-lg font-semibold text-[#576363]">
+						Receiving wallets
+					</h2>
+					<p className="mt-1 max-w-3xl text-sm leading-6 text-[#5d6163]">
+						Manage the active BTC, ETH, and USDT addresses shown to users when
+						they create crypto deposits.
+					</p>
+				</div>
+				<Button type="button" onClick={onAdd}>
+					Add Wallet
+				</Button>
+			</div>
+
+			<div className="grid gap-4 p-5 md:grid-cols-3">
+				{wallets.map((wallet) => (
+					<div
+						key={wallet.id}
+						className="rounded-lg border border-[#eef1f1] bg-[#f7faf9] p-4"
+					>
+						<div className="flex items-start justify-between gap-3">
+							<div>
+								<p className="font-semibold text-[#576363]">{wallet.label}</p>
+								<p className="mt-1 text-sm text-[#5d6163]">
+									{wallet.asset} - {wallet.network}
+								</p>
+							</div>
+							<span
+								className={cn(
+									"rounded-full px-2.5 py-1 text-xs font-semibold",
+									wallet.isActive
+										? "bg-[#e6f3ec] text-[#2e8f5b]"
+										: "bg-[#eef1f1] text-[#5d6163]",
+								)}
+							>
+								{wallet.isActive ? "Active" : "Inactive"}
+							</span>
+						</div>
+						<p className="mt-3 break-all font-mono text-xs leading-5 text-[#576363]">
+							{wallet.address}
+						</p>
+						<p className="mt-3 text-xs text-[#5d6163]">
+							Updated {formatDateTime(wallet.updatedAt)}
+						</p>
+						<div className="mt-4 flex flex-wrap gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => onToggleActive(wallet.id)}
+							>
+								{wallet.isActive ? "Disable" : "Activate"}
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => onRemove(wallet.id)}
+							>
+								Remove
+							</Button>
+						</div>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
+function ReceivingWalletModal({
+	onAdd,
+	onClose,
+}: {
+	onAdd: (draft: ReceivingWalletDraft) => void;
+	onClose: () => void;
+}) {
+	const [draft, setDraft] = useState<ReceivingWalletDraft>({
+		address: "",
+		asset: "BTC",
+		label: "",
+		network: defaultNetworkByAsset.BTC,
+	});
+
+	const updateAsset = (asset: AdminReceivingWalletAsset) => {
+		setDraft((current) => ({
+			...current,
+			asset,
+			network: defaultNetworkByAsset[asset],
+		}));
+	};
+
+	const handleSubmit = () => {
+		if (!draft.address.trim() || !draft.network.trim()) {
+			return;
+		}
+
+		onAdd(draft);
+	};
+
+	return (
+		<div
+			className="fixed inset-0 z-[70] bg-[#1f2929]/45 p-3 backdrop-blur-sm sm:p-5"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="admin-wallet-modal-title"
+		>
+			<div className="absolute inset-0" aria-hidden="true" onClick={onClose} />
+			<section className="relative mx-auto flex max-h-[calc(100vh-24px)] max-w-2xl flex-col overflow-hidden rounded-lg border border-[#d7e5e3] bg-white shadow-[0_28px_90px_rgba(31,41,41,0.28)] sm:max-h-[calc(100vh-40px)]">
+				<header className="flex items-start justify-between gap-4 border-b border-[#d7e5e3] px-4 py-4 sm:px-6">
+					<div className="min-w-0">
+						<p className="text-sm text-[#5d6163]">Receiving wallet</p>
+						<h2
+							id="admin-wallet-modal-title"
+							className="mt-1 text-xl font-semibold text-[#576363]"
+						>
+							Add deposit address
+						</h2>
+					</div>
+					<Button type="button" variant="outline" onClick={onClose}>
+						Close
+					</Button>
+				</header>
+
+				<div className="overflow-y-auto p-4 sm:p-6">
+					<div className="grid gap-5">
+						<div>
+							<p className="text-sm font-semibold text-[#576363]">Asset</p>
+							<div className="mt-3 grid gap-3 sm:grid-cols-3">
+								{receivingAssets.map((asset) => {
+									const active = draft.asset === asset;
+
+									return (
+										<button
+											key={asset}
+											type="button"
+											onClick={() => updateAsset(asset)}
+											className={cn(
+												"rounded-lg border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#5F9EA0]/15",
+												active
+													? "border-[#5F9EA0] bg-[#eef6f5]"
+													: "border-[#d7e5e3] bg-white hover:bg-[#f7faf9]",
+											)}
+										>
+											<p className="font-semibold text-[#576363]">{asset}</p>
+											<p className="mt-1 text-sm text-[#5d6163]">
+												{assetDisplayName[asset]}
+											</p>
+											<p className="mt-2 text-xs font-semibold text-[#3c7f80]">
+												{defaultNetworkByAsset[asset]}
+											</p>
+										</button>
+									);
+								})}
+							</div>
+						</div>
+
+						<div className="grid gap-4 sm:grid-cols-2">
+							<div>
+								<label className="text-sm font-semibold text-[#576363]" htmlFor="wallet-label">
+									Label
+								</label>
+								<input
+									id="wallet-label"
+									value={draft.label}
+									onChange={(event) =>
+										setDraft((current) => ({
+											...current,
+											label: event.target.value,
+										}))
+									}
+									placeholder={`Primary ${draft.asset}`}
+									className="mt-2 h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm font-medium text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+								/>
+							</div>
+
+							<div>
+								<label className="text-sm font-semibold text-[#576363]" htmlFor="wallet-network">
+									Network
+								</label>
+								<input
+									id="wallet-network"
+									value={draft.network}
+									onChange={(event) =>
+										setDraft((current) => ({
+											...current,
+											network: event.target.value,
+										}))
+									}
+									className="mt-2 h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm font-medium text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label className="text-sm font-semibold text-[#576363]" htmlFor="wallet-address">
+								Wallet address
+							</label>
+							<textarea
+								id="wallet-address"
+								value={draft.address}
+								onChange={(event) =>
+									setDraft((current) => ({
+										...current,
+										address: event.target.value,
+									}))
+								}
+								placeholder="Paste the receiving address shown to users"
+								rows={5}
+								className="mt-2 w-full rounded-md border border-[#cfdcda] bg-white px-3 py-2 text-sm font-medium text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+							/>
+						</div>
+
+						<div className="rounded-lg bg-[#fff8ec] p-4 text-sm leading-6 text-[#8a5b14]">
+							Only add addresses that match the selected asset and network.
+							Users may lose funds if the wrong network is displayed.
+						</div>
+					</div>
+				</div>
+
+				<footer className="flex flex-col-reverse gap-3 border-t border-[#d7e5e3] px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+					<Button type="button" variant="outline" onClick={onClose}>
+						Cancel
+					</Button>
+					<Button
+						type="button"
+						onClick={handleSubmit}
+						disabled={!draft.address.trim() || !draft.network.trim()}
+					>
+						Add wallet
+					</Button>
+				</footer>
+			</section>
+		</div>
+	);
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="border-b border-[#eef1f1] pb-3 last:border-b-0 last:pb-0">
@@ -677,6 +1123,48 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 			<p className="mt-1 break-words text-sm font-semibold text-[#576363]">
 				{value}
 			</p>
+		</div>
+	);
+}
+
+function DepositReviewModal({
+	children,
+	deposit,
+	onClose,
+}: {
+	children: React.ReactNode;
+	deposit: AdminDeposit;
+	onClose: () => void;
+}) {
+	return (
+		<div
+			className="fixed inset-0 z-[70] bg-[#1f2929]/45 p-3 backdrop-blur-sm sm:p-5"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="admin-deposit-review-modal-title"
+		>
+			<div
+				className="absolute inset-0"
+				aria-hidden="true"
+				onClick={onClose}
+			/>
+			<section className="relative mx-auto flex max-h-[calc(100vh-24px)] max-w-4xl flex-col overflow-hidden rounded-lg border border-[#d7e5e3] bg-[#f7faf9] shadow-[0_28px_90px_rgba(31,41,41,0.28)] sm:max-h-[calc(100vh-40px)]">
+				<header className="flex items-start justify-between gap-4 border-b border-[#d7e5e3] bg-white px-4 py-4 sm:px-6">
+					<div className="min-w-0">
+						<p className="text-sm text-[#5d6163]">Deposit review</p>
+						<h2
+							id="admin-deposit-review-modal-title"
+							className="mt-1 truncate text-xl font-semibold text-[#576363]"
+						>
+							{deposit.reference} - {deposit.userName}
+						</h2>
+					</div>
+					<Button type="button" variant="outline" onClick={onClose}>
+						Close
+					</Button>
+				</header>
+				<div className="overflow-y-auto p-4 sm:p-6">{children}</div>
+			</section>
 		</div>
 	);
 }

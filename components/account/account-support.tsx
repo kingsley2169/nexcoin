@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import {
 	type SupportSummary,
 	type SupportTicket,
@@ -12,8 +13,31 @@ import {
 	ticketPriorityLabels,
 	ticketStatusLabels,
 } from "@/lib/support-tickets";
+import { createSupportTicket } from "@/app/account/support/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const CATEGORY_TO_DB: Record<
+	TicketCategory,
+	"account" | "deposit" | "general" | "investment" | "kyc" | "security" | "withdrawal"
+> = {
+	account: "account",
+	deposits: "deposit",
+	kyc: "kyc",
+	other: "general",
+	plans: "investment",
+	security: "security",
+	withdrawals: "withdrawal",
+};
+
+const PRIORITY_TO_DB: Record<
+	TicketPriority,
+	"high" | "low" | "medium"
+> = {
+	high: "high",
+	low: "low",
+	normal: "medium",
+};
 
 type AccountSupportProps = {
 	summary: SupportSummary;
@@ -55,23 +79,17 @@ function formatTicketDate(iso: string) {
 	return dateFormatter.format(new Date(iso));
 }
 
-function generateReference(existing: SupportTicket[]) {
-	const numbers = existing.map((ticket) => {
-		const match = ticket.reference.match(/\d+/);
-
-		return match ? Number(match[0]) : 0;
-	});
-	const next = Math.max(...numbers, 2040) + 1;
-
-	return `NX-${next}`;
-}
-
 export function AccountSupport({ summary, tickets }: AccountSupportProps) {
-	const [ticketList, setTicketList] = useState(tickets);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const ticketList = tickets;
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 	const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
 	const [query, setQuery] = useState("");
 	const [isComposerOpen, setIsComposerOpen] = useState(false);
+	const [notice, setNotice] = useState<
+		{ tone: "success" | "error"; message: string } | null
+	>(null);
 
 	const visibleTickets = useMemo(() => {
 		const trimmed = query.trim().toLowerCase();
@@ -97,9 +115,38 @@ export function AccountSupport({ summary, tickets }: AccountSupportProps) {
 		});
 	}, [categoryFilter, query, statusFilter, ticketList]);
 
-	function handleCreateTicket(ticket: SupportTicket) {
-		setTicketList((current) => [ticket, ...current]);
-		setIsComposerOpen(false);
+	function handleCreateTicket(draft: {
+		category: TicketCategory;
+		message: string;
+		priority: TicketPriority;
+		relatedReference: string;
+		subject: string;
+	}) {
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await createSupportTicket({
+				category: CATEGORY_TO_DB[draft.category],
+				messageBody: draft.message,
+				priority: PRIORITY_TO_DB[draft.priority],
+				relatedReference: draft.relatedReference,
+				subject: draft.relatedReference.trim()
+					? `${draft.subject.trim()} (Ref: ${draft.relatedReference.trim()})`
+					: draft.subject.trim(),
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: `Ticket ${result.data?.reference ?? ""} opened.`,
+			});
+			setIsComposerOpen(false);
+			router.refresh();
+		});
 	}
 
 	return (
@@ -129,6 +176,21 @@ export function AccountSupport({ summary, tickets }: AccountSupportProps) {
 					</Link>
 				</div>
 			</section>
+
+			{notice ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
 
 			<section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
 				<SummaryCard
@@ -328,9 +390,9 @@ export function AccountSupport({ summary, tickets }: AccountSupportProps) {
 
 			{isComposerOpen ? (
 				<TicketComposer
+					isSubmitting={isPending}
 					onClose={() => setIsComposerOpen(false)}
 					onCreate={handleCreateTicket}
-					nextReference={generateReference(ticketList)}
 				/>
 			) : null}
 		</div>
@@ -383,13 +445,19 @@ function EmptyState({
 }
 
 function TicketComposer({
-	nextReference,
+	isSubmitting,
 	onClose,
 	onCreate,
 }: {
-	nextReference: string;
+	isSubmitting: boolean;
 	onClose: () => void;
-	onCreate: (ticket: SupportTicket) => void;
+	onCreate: (draft: {
+		category: TicketCategory;
+		message: string;
+		priority: TicketPriority;
+		relatedReference: string;
+		subject: string;
+	}) => void;
 }) {
 	const [subject, setSubject] = useState("");
 	const [category, setCategory] = useState<TicketCategory>("account");
@@ -397,7 +465,10 @@ function TicketComposer({
 	const [relatedReference, setRelatedReference] = useState("");
 	const [message, setMessage] = useState("");
 
-	const isSubmittable = subject.trim().length >= 4 && message.trim().length >= 10;
+	const isSubmittable =
+		subject.trim().length >= 4 &&
+		message.trim().length >= 10 &&
+		!isSubmitting;
 
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -406,32 +477,12 @@ function TicketComposer({
 			return;
 		}
 
-		const now = new Date().toISOString();
-		const trimmedSubject = relatedReference.trim()
-			? `${subject.trim()} (Ref: ${relatedReference.trim()})`
-			: subject.trim();
-
 		onCreate({
 			category,
-			createdAt: now,
-			id: `tkt-${Date.now()}`,
-			lastMessageFrom: "user",
-			messageCount: 1,
-			messages: [
-				{
-					author: "user",
-					authorName: "You",
-					body: message.trim(),
-					createdAt: now,
-					id: `msg-${Date.now()}`,
-				},
-			],
+			message,
 			priority,
-			reference: nextReference,
-			status: "open",
-			subject: trimmedSubject,
-			unread: false,
-			updatedAt: now,
+			relatedReference,
+			subject,
 		});
 	}
 
@@ -453,7 +504,7 @@ function TicketComposer({
 				<div className="flex items-start justify-between border-b border-[#eef1f0] px-6 py-5">
 					<div>
 						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5F9EA0]">
-							{nextReference}
+							New ticket
 						</p>
 						<h2 className="mt-1 text-xl font-semibold text-[#576363]">
 							Open a new ticket
@@ -560,7 +611,7 @@ function TicketComposer({
 						Cancel
 					</Button>
 					<Button type="submit" disabled={!isSubmittable}>
-						Submit ticket
+						{isSubmitting ? "Submitting…" : "Submit ticket"}
 					</Button>
 				</div>
 			</form>

@@ -1,6 +1,12 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type AdminUserStatus = "Active" | "Flagged" | "Suspended";
 
-export type AdminUserKycStatus = "Approved" | "Pending" | "Rejected" | "Unverified";
+export type AdminUserKycStatus =
+	| "Approved"
+	| "Pending"
+	| "Rejected"
+	| "Unverified";
 
 export type AdminUserRisk = "High" | "Low" | "Medium";
 
@@ -30,103 +36,116 @@ export type AdminUsersData = {
 	users: AdminUser[];
 };
 
-export const adminUsersData: AdminUsersData = {
-	summary: {
-		activeUsers: 2394,
-		flaggedUsers: 18,
-		pendingKyc: 146,
-		totalUsers: 2846,
-	},
-	users: [
-		{
-			activePlans: 2,
-			availableBalanceUsd: 6850,
-			country: "Cyprus",
-			createdAt: "2026-01-14T10:20:00Z",
-			depositsUsd: 27820,
-			email: "alex.morgan@example.com",
-			id: "usr-1001",
-			kycStatus: "Pending",
-			lastActiveAt: "2026-04-22T09:52:00Z",
-			name: "Alex Morgan",
-			risk: "Medium",
-			status: "Flagged",
-			withdrawalsUsd: 2486.77,
-		},
-		{
-			activePlans: 1,
-			availableBalanceUsd: 1420,
-			country: "United States",
-			createdAt: "2026-02-03T15:44:00Z",
-			depositsUsd: 9200,
-			email: "maya.chen@example.com",
-			id: "usr-1002",
-			kycStatus: "Approved",
-			lastActiveAt: "2026-04-22T08:41:00Z",
-			name: "Maya Chen",
-			risk: "Low",
-			status: "Active",
-			withdrawalsUsd: 1250,
-		},
-		{
-			activePlans: 4,
-			availableBalanceUsd: 18500,
-			country: "Nigeria",
-			createdAt: "2025-11-20T12:11:00Z",
-			depositsUsd: 84200,
-			email: "daniel.brooks@example.com",
-			id: "usr-1003",
-			kycStatus: "Approved",
-			lastActiveAt: "2026-04-21T23:12:00Z",
-			name: "Daniel Brooks",
-			risk: "Low",
-			status: "Active",
-			withdrawalsUsd: 12600,
-		},
-		{
-			activePlans: 0,
-			availableBalanceUsd: 0,
-			country: "United Kingdom",
-			createdAt: "2026-04-10T09:18:00Z",
-			depositsUsd: 300,
-			email: "victor.stone@example.com",
-			id: "usr-1004",
-			kycStatus: "Unverified",
-			lastActiveAt: "2026-04-22T08:10:00Z",
-			name: "Victor Stone",
-			risk: "High",
-			status: "Flagged",
-			withdrawalsUsd: 0,
-		},
-		{
-			activePlans: 1,
-			availableBalanceUsd: 890,
-			country: "Canada",
-			createdAt: "2026-03-18T16:26:00Z",
-			depositsUsd: 5250,
-			email: "lynn.foster@example.com",
-			id: "usr-1005",
-			kycStatus: "Pending",
-			lastActiveAt: "2026-04-22T09:48:00Z",
-			name: "Lynn Foster",
-			risk: "Medium",
-			status: "Active",
-			withdrawalsUsd: 500,
-		},
-		{
-			activePlans: 0,
-			availableBalanceUsd: 120,
-			country: "Germany",
-			createdAt: "2026-02-27T14:03:00Z",
-			depositsUsd: 1600,
-			email: "grace.lee@example.com",
-			id: "usr-1006",
-			kycStatus: "Rejected",
-			lastActiveAt: "2026-04-19T19:32:00Z",
-			name: "Grace Lee",
-			risk: "High",
-			status: "Suspended",
-			withdrawalsUsd: 1480,
-		},
-	],
+type SummaryRow = {
+	active_users: number | string;
+	flagged_users: number | string;
+	pending_kyc: number | string;
+	total_users: number | string;
 };
+
+type UserRow = {
+	active_plans: number | string;
+	available_balance_usd: number | string;
+	country: string | null;
+	created_at: string;
+	deposits_usd: number | string;
+	email: string | null;
+	id: string;
+	kyc_status: string | null;
+	last_active_at: string | null;
+	name: string | null;
+	risk: string | null;
+	status: string;
+	withdrawals_usd: number | string;
+};
+
+function toNumber(value: number | string | null | undefined) {
+	if (typeof value === "number") return value;
+	if (typeof value === "string" && value.length > 0) return Number(value);
+	return 0;
+}
+
+function mapStatus(value: string): AdminUserStatus {
+	switch (value) {
+		case "flagged":
+			return "Flagged";
+		case "suspended":
+			return "Suspended";
+		default:
+			return "Active";
+	}
+}
+
+function mapKyc(value: string | null): AdminUserKycStatus {
+	switch (value) {
+		case "approved":
+			return "Approved";
+		case "pending":
+		case "in_review":
+		case "needs_resubmission":
+			return "Pending";
+		case "rejected":
+			return "Rejected";
+		default:
+			return "Unverified";
+	}
+}
+
+function mapRisk(value: string | null): AdminUserRisk {
+	switch (value) {
+		case "high":
+			return "High";
+		case "medium":
+			return "Medium";
+		default:
+			return "Low";
+	}
+}
+
+export async function getAdminUsersData(
+	supabase: SupabaseClient,
+): Promise<AdminUsersData> {
+	const [summaryResult, usersResult] = await Promise.all([
+		supabase
+			.rpc("get_admin_user_management_summary")
+			.single<SummaryRow>(),
+		supabase
+			.from("admin_user_management_view")
+			.select(
+				"id,name,email,country,status,created_at,last_active_at,kyc_status,risk,available_balance_usd,deposits_usd,withdrawals_usd,active_plans",
+			)
+			.order("created_at", { ascending: false })
+			.returns<UserRow[]>(),
+	]);
+
+	if (summaryResult.error) throw new Error(summaryResult.error.message);
+	if (usersResult.error) throw new Error(usersResult.error.message);
+
+	const summary = summaryResult.data;
+
+	const users: AdminUser[] = (usersResult.data ?? []).map((row) => ({
+		activePlans: toNumber(row.active_plans),
+		availableBalanceUsd: toNumber(row.available_balance_usd),
+		country: row.country ?? "",
+		createdAt: row.created_at,
+		depositsUsd: toNumber(row.deposits_usd),
+		email: row.email ?? "",
+		id: row.id,
+		kycStatus: mapKyc(row.kyc_status),
+		lastActiveAt: row.last_active_at ?? row.created_at,
+		name: row.name ?? "Unknown user",
+		risk: mapRisk(row.risk),
+		status: mapStatus(row.status),
+		withdrawalsUsd: toNumber(row.withdrawals_usd),
+	}));
+
+	return {
+		summary: {
+			activeUsers: toNumber(summary?.active_users),
+			flaggedUsers: toNumber(summary?.flagged_users),
+			pendingKyc: toNumber(summary?.pending_kyc),
+			totalUsers: toNumber(summary?.total_users),
+		},
+		users,
+	};
+}

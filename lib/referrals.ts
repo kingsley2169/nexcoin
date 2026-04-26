@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type ReferralStatus =
 	| "Active investor"
 	| "Invited"
@@ -66,192 +68,200 @@ export type ReferralProgram = {
 	tiers: ReferralTier[];
 };
 
-export const referralProgram: ReferralProgram = {
-	currentTierId: "tier-2",
-	earnings: [
-		{
-			amountUsd: 75,
-			createdAt: "2026-04-14T12:05:00Z",
-			id: "ref-earn-1",
-			reference: "TX-9036",
-			sourceMaskedName: "lynn.k",
-			status: "Credited",
-			type: "Investment commission",
-		},
-		{
-			amountUsd: 50,
-			createdAt: "2026-04-04T11:18:00Z",
-			id: "ref-earn-2",
-			reference: "TX-9027",
-			sourceMaskedName: "marc.j",
-			status: "Credited",
-			type: "Signup bonus",
-		},
-		{
-			amountUsd: 120,
-			createdAt: "2026-03-28T09:42:00Z",
-			id: "ref-earn-3",
-			reference: "TX-8912",
-			sourceMaskedName: "priya.s",
-			status: "Credited",
-			type: "Investment commission",
-		},
-		{
-			amountUsd: 32.4,
-			createdAt: "2026-03-22T16:10:00Z",
-			id: "ref-earn-4",
-			reference: "TX-8874",
-			sourceMaskedName: "priya.s",
-			status: "Credited",
-			type: "Profit share",
-		},
-		{
-			amountUsd: 25,
-			createdAt: "2026-03-15T08:45:00Z",
-			id: "ref-earn-5",
-			reference: "TX-8821",
-			sourceMaskedName: "devon.r",
-			status: "Credited",
-			type: "Signup bonus",
-		},
-		{
-			amountUsd: 180,
-			createdAt: "2026-04-19T19:25:00Z",
-			id: "ref-earn-6",
-			reference: "TX-9060",
-			sourceMaskedName: "lynn.k",
-			status: "Pending",
-			type: "Investment commission",
-		},
-	],
-	inviteTemplates: [
-		{
-			body: "I've been using Nexcoin for crypto investing and wanted to pass along my referral link — we both earn a bonus when you sign up and fund an account. Here's the link: {{link}}",
-			id: "tmpl-1",
-			label: "Casual — friend",
-		},
-		{
-			body: "Hey, if you're exploring crypto investment platforms, Nexcoin has been solid for me. Use my link for a signup bonus: {{link}}. Code: {{code}}.",
-			id: "tmpl-2",
-			label: "Short — social DM",
-		},
-		{
-			body: "Happy to share: Nexcoin runs structured crypto investment plans with daily profit accrual and straightforward withdrawals. If you'd like to try it, use my referral link ({{link}}) — we both get a bonus once you fund your account.",
-			id: "tmpl-3",
-			label: "Longer — email",
-		},
-	],
-	nextTierProgress: {
-		current: 7,
-		target: 15,
+const inviteTemplates: InviteTemplate[] = [
+	{
+		body: "I've been using Nexcoin for crypto investing and wanted to pass along my referral link — we both earn a bonus when you sign up and fund an account. Here's the link: {{link}}",
+		id: "tmpl-1",
+		label: "Casual — friend",
 	},
-	programTermsUrl: "/legal#referrals",
-	referralCode: "ALEX2169",
-	referralLink: "https://nexcoin.com/signup?ref=alex2169",
-	referredUsers: [
-		{
-			amountInvestedUsd: 4000,
-			earningsUsd: 332.4,
-			id: "ref-1",
-			joinedAt: "2026-02-08T10:12:00Z",
-			maskedEmail: "pr**ya.s@gmail.com",
-			maskedName: "Priya S.",
-			status: "Active investor",
-		},
-		{
-			amountInvestedUsd: 2500,
-			earningsUsd: 255,
-			id: "ref-2",
-			joinedAt: "2026-03-04T09:45:00Z",
-			maskedEmail: "ly**n.k@proton.me",
-			maskedName: "Lynn K.",
-			status: "Active investor",
-		},
-		{
-			amountInvestedUsd: 1000,
-			earningsUsd: 75,
-			id: "ref-3",
-			joinedAt: "2026-03-28T14:22:00Z",
-			maskedEmail: "ma**c.j@outlook.com",
-			maskedName: "Marc J.",
-			status: "Active investor",
-		},
-		{
-			amountInvestedUsd: 0,
-			earningsUsd: 25,
-			id: "ref-4",
-			joinedAt: "2026-03-14T08:30:00Z",
-			maskedEmail: "de**n.r@yahoo.com",
-			maskedName: "Devon R.",
-			status: "Verified",
-		},
-		{
-			amountInvestedUsd: 0,
-			earningsUsd: 0,
-			id: "ref-5",
-			joinedAt: "2026-04-02T19:10:00Z",
-			maskedEmail: "sa**h.t@gmail.com",
-			maskedName: "Sarah T.",
-			status: "Signed up",
-		},
-		{
-			amountInvestedUsd: 0,
-			earningsUsd: 0,
-			id: "ref-6",
-			joinedAt: "2026-04-08T11:05:00Z",
-			maskedEmail: "ke**n.m@gmail.com",
-			maskedName: "Kevin M.",
-			status: "Signed up",
-		},
-		{
-			amountInvestedUsd: 0,
-			earningsUsd: 0,
-			id: "ref-7",
-			joinedAt: "2026-04-15T16:40:00Z",
-			maskedEmail: "ta**a.o@icloud.com",
-			maskedName: "Tara O.",
-			status: "Invited",
-		},
-	],
-	stats: {
-		activeInvestors: 3,
-		pendingUsd: 180,
-		totalEarnedUsd: 682.4,
-		totalReferred: 7,
+	{
+		body: "Hey, if you're exploring crypto investment platforms, Nexcoin has been solid for me. Use my link for a signup bonus: {{link}}. Code: {{code}}.",
+		id: "tmpl-2",
+		label: "Short — social DM",
 	},
-	tiers: [
-		{
-			commissionPercent: 5,
-			id: "tier-1",
-			minActiveReferrals: 0,
-			name: "Starter",
-			perks: [
-				"5% commission on referred deposits",
-				"$25 signup bonus per verified referral",
-			],
-		},
-		{
-			commissionPercent: 12,
-			id: "tier-2",
-			minActiveReferrals: 3,
-			name: "Tier 2",
-			perks: [
-				"12% commission on referred investments",
-				"$50 signup bonus per verified referral",
-				"2% profit share on active referrals",
-			],
-		},
-		{
-			commissionPercent: 20,
-			id: "tier-3",
-			minActiveReferrals: 15,
-			name: "Pioneer",
-			perks: [
-				"20% commission on referred investments",
-				"$100 signup bonus per verified referral",
-				"5% profit share on active referrals",
-				"Early access to new investment plans",
-			],
-		},
-	],
+	{
+		body: "Happy to share: Nexcoin runs structured crypto investment plans with daily profit accrual and straightforward withdrawals. If you'd like to try it, use my referral link ({{link}}) — we both get a bonus once you fund your account.",
+		id: "tmpl-3",
+		label: "Longer — email",
+	},
+];
+
+type SummaryRow = {
+	active_investors_count: number | string;
+	current_tier_id: string | null;
+	pending_usd: number | string;
+	next_tier_current: number | string | null;
+	next_tier_target: number | string | null;
+	program_terms_url: string;
+	referral_code: string | null;
+	referral_link: string | null;
+	total_earned_usd: number | string;
+	total_referred: number | string;
 };
+
+type TierRow = {
+	commission_percent: number | string;
+	id: string;
+	min_active_referrals: number | string;
+	name: string;
+	perks: string[] | null;
+};
+
+type ReferredRow = {
+	amount_invested_usd: number | string;
+	display_status: string;
+	earnings_usd: number | string;
+	id: string;
+	joined_at: string;
+	masked_email: string;
+	masked_name: string;
+};
+
+type EarningRow = {
+	amount_usd: number | string;
+	created_at: string;
+	id: string;
+	source_masked_name: string;
+	status_label: string;
+	transaction_reference: string;
+	type_label: string;
+};
+
+function toNumber(value: number | string | null | undefined) {
+	if (typeof value === "number") return value;
+	if (typeof value === "string" && value.length > 0) return Number(value);
+	return 0;
+}
+
+function mapStatus(value: string): ReferralStatus {
+	switch (value) {
+		case "Active investor":
+			return "Active investor";
+		case "Verified":
+			return "Verified";
+		case "Signed up":
+			return "Signed up";
+		default:
+			return "Invited";
+	}
+}
+
+function mapEarningType(value: string): ReferralEarningType {
+	switch (value) {
+		case "Profit share":
+			return "Profit share";
+		case "Signup bonus":
+			return "Signup bonus";
+		default:
+			return "Investment commission";
+	}
+}
+
+function mapEarningStatus(value: string): ReferralEarningStatus {
+	return value === "Credited" ? "Credited" : "Pending";
+}
+
+export async function getReferralProgramData(
+	supabase: SupabaseClient,
+): Promise<ReferralProgram> {
+	const [summaryResult, tiersResult, referredResult, earningsResult] =
+		await Promise.all([
+			supabase
+				.from("user_referral_summary_view")
+				.select(
+					"referral_code,referral_link,current_tier_id,next_tier_current,next_tier_target,total_referred,active_investors_count,total_earned_usd,pending_usd,program_terms_url",
+				)
+				.maybeSingle<SummaryRow>(),
+			supabase
+				.from("referral_tiers")
+				.select("id,name,min_active_referrals,commission_percent,perks")
+				.order("display_order", { ascending: true })
+				.returns<TierRow[]>(),
+			supabase
+				.from("user_referred_users_view")
+				.select(
+					"id,masked_name,masked_email,display_status,amount_invested_usd,earnings_usd,joined_at",
+				)
+				.returns<ReferredRow[]>(),
+			supabase
+				.from("user_referral_earnings_view")
+				.select(
+					"id,transaction_reference,type_label,amount_usd,status_label,source_masked_name,created_at",
+				)
+				.returns<EarningRow[]>(),
+		]);
+
+	if (summaryResult.error) throw new Error(summaryResult.error.message);
+	if (tiersResult.error) throw new Error(tiersResult.error.message);
+	if (referredResult.error) throw new Error(referredResult.error.message);
+	if (earningsResult.error) throw new Error(earningsResult.error.message);
+
+	const summary = summaryResult.data;
+	const tiers: ReferralTier[] = (tiersResult.data ?? []).map((row) => ({
+		commissionPercent: toNumber(row.commission_percent),
+		id: row.id,
+		minActiveReferrals: toNumber(row.min_active_referrals),
+		name: row.name,
+		perks: row.perks ?? [],
+	}));
+
+	const referredUsers: ReferredUser[] = (referredResult.data ?? []).map(
+		(row) => ({
+			amountInvestedUsd: toNumber(row.amount_invested_usd),
+			earningsUsd: toNumber(row.earnings_usd),
+			id: row.id,
+			joinedAt: row.joined_at,
+			maskedEmail: row.masked_email,
+			maskedName: row.masked_name,
+			status: mapStatus(row.display_status),
+		}),
+	);
+
+	const earnings: ReferralEarning[] = (earningsResult.data ?? []).map(
+		(row) => ({
+			amountUsd: toNumber(row.amount_usd),
+			createdAt: row.created_at,
+			id: row.id,
+			reference: row.transaction_reference,
+			sourceMaskedName: row.source_masked_name,
+			status: mapEarningStatus(row.status_label),
+			type: mapEarningType(row.type_label),
+		}),
+	);
+
+	const currentTierId =
+		summary?.current_tier_id ?? tiers[0]?.id ?? "tier-1";
+
+	const activeInvestors = toNumber(summary?.active_investors_count);
+	const nextTierTargetRaw = summary?.next_tier_target;
+	const nextTierTarget =
+		nextTierTargetRaw === null || nextTierTargetRaw === undefined
+			? activeInvestors
+			: toNumber(nextTierTargetRaw);
+	const nextTierCurrent =
+		summary?.next_tier_current === null ||
+		summary?.next_tier_current === undefined
+			? activeInvestors
+			: toNumber(summary.next_tier_current);
+
+	return {
+		currentTierId,
+		earnings,
+		inviteTemplates,
+		nextTierProgress: {
+			current: nextTierCurrent,
+			target: nextTierTarget,
+		},
+		programTermsUrl: summary?.program_terms_url ?? "/legal#referrals",
+		referralCode: summary?.referral_code ?? "",
+		referralLink: summary?.referral_link ?? "",
+		referredUsers,
+		stats: {
+			activeInvestors,
+			pendingUsd: toNumber(summary?.pending_usd),
+			totalEarnedUsd: toNumber(summary?.total_earned_usd),
+			totalReferred: toNumber(summary?.total_referred),
+		},
+		tiers,
+	};
+}

@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import {
 	type SupportTicket,
-	type TicketMessage,
 	type TicketStatus,
 	ticketCategoryLabels,
 	ticketPriorityLabels,
 	ticketStatusLabels,
 } from "@/lib/support-tickets";
+import {
+	markTicketRead,
+	replySupportTicket,
+} from "@/app/account/support/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -33,12 +37,22 @@ function formatMessageDate(iso: string) {
 }
 
 export function AccountSupportThread({ ticket }: { ticket: SupportTicket }) {
-	const [messages, setMessages] = useState<TicketMessage[]>(ticket.messages);
-	const [status, setStatus] = useState<TicketStatus>(ticket.status);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const messages = ticket.messages;
+	const status: TicketStatus = ticket.status;
 	const [reply, setReply] = useState("");
+	const [notice, setNotice] = useState<
+		{ tone: "success" | "error"; message: string } | null
+	>(null);
 
-	const isLocked = status === "resolved" || status === "closed";
-	const canSubmitReply = !isLocked && reply.trim().length >= 4;
+	const isLocked = status === "closed";
+	const canSubmitReply = !isLocked && reply.trim().length >= 4 && !isPending;
+
+	useEffect(() => {
+		if (!ticket.unread) return;
+		void markTicketRead(ticket.id);
+	}, [ticket.id, ticket.unread]);
 
 	function handleReply(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -47,28 +61,18 @@ export function AccountSupportThread({ ticket }: { ticket: SupportTicket }) {
 			return;
 		}
 
-		const now = new Date().toISOString();
+		startTransition(async () => {
+			const result = await replySupportTicket(ticket.id, reply);
 
-		setMessages((current) => [
-			...current,
-			{
-				author: "user",
-				authorName: "You",
-				body: reply.trim(),
-				createdAt: now,
-				id: `msg-${Date.now()}`,
-			},
-		]);
-		setReply("");
-		setStatus("open");
-	}
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
 
-	function handleClose() {
-		setStatus("closed");
-	}
-
-	function handleReopen() {
-		setStatus("open");
+			setReply("");
+			setNotice({ tone: "success", message: "Reply sent." });
+			router.refresh();
+		});
 	}
 
 	return (
@@ -116,17 +120,28 @@ export function AccountSupportThread({ ticket }: { ticket: SupportTicket }) {
 
 					<div className="flex shrink-0 flex-wrap gap-2">
 						{isLocked ? (
-							<Button variant="outline" onClick={handleReopen}>
-								Reopen ticket
-							</Button>
-						) : (
-							<Button variant="outline" onClick={handleClose}>
-								Close ticket
-							</Button>
-						)}
+							<p className="text-xs leading-5 text-[#5d6163]">
+								Reply below to re-open this ticket.
+							</p>
+						) : null}
 					</div>
 				</div>
 			</section>
+
+			{notice ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
 
 			<section className="rounded-lg border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
 				<h2 className="text-lg font-semibold text-[#576363]">Conversation</h2>
@@ -191,7 +206,7 @@ export function AccountSupportThread({ ticket }: { ticket: SupportTicket }) {
 						<span className="font-semibold text-[#576363]">
 							{ticketStatusLabels[status].toLowerCase()}
 						</span>
-						. Reopen it to continue the conversation, or open a new ticket for a
+						. Closed tickets cannot be replied to — open a new ticket for a
 						different issue.
 					</div>
 				) : (
@@ -213,7 +228,7 @@ export function AccountSupportThread({ ticket }: { ticket: SupportTicket }) {
 								passwords, private keys, or seed phrases.
 							</p>
 							<Button type="submit" disabled={!canSubmitReply}>
-								Send reply
+								{isPending ? "Sending…" : "Send reply"}
 							</Button>
 						</div>
 					</form>

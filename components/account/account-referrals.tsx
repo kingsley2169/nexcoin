@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import {
 	type ReferralEarningStatus,
 	type ReferralProgram,
 	type ReferralStatus,
 	type ReferralTier,
 } from "@/lib/referrals";
+import { claimReferralEarning } from "@/app/account/referrals/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -147,9 +149,37 @@ function useCopy() {
 }
 
 export function AccountReferrals({ data }: AccountReferralsProps) {
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
 	const [userFilter, setUserFilter] = useState<UserFilter>("all");
 	const [userSearch, setUserSearch] = useState("");
+	const [claimingId, setClaimingId] = useState<string | null>(null);
+	const [notice, setNotice] = useState<
+		{ tone: "error" | "success"; message: string } | null
+	>(null);
 	const { copiedId, copy } = useCopy();
+
+	const claim = (earningId: string) => {
+		if (isPending) return;
+		setClaimingId(earningId);
+
+		startTransition(async () => {
+			const result = await claimReferralEarning(earningId);
+
+			setClaimingId(null);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: "Earning claimed and credited to your balance.",
+			});
+			router.refresh();
+		});
+	};
 
 	const currentTier = useMemo(
 		() =>
@@ -236,8 +266,23 @@ export function AccountReferrals({ data }: AccountReferralsProps) {
 				</span>
 			</header>
 
+			{notice ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
+
 			<section className="rounded-lg border border-[#d7e5e3] bg-gradient-to-br from-[#f1f8f7] to-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
-				<div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+				<div>
 					<div className="space-y-4">
 						<div>
 							<p className="text-xs font-medium uppercase tracking-wide text-[#8a9a9a]">
@@ -320,14 +365,6 @@ export function AccountReferrals({ data }: AccountReferralsProps) {
 									icon={EmailIcon}
 								/>
 							</div>
-						</div>
-					</div>
-					<div className="hidden lg:flex lg:flex-col lg:items-end lg:justify-center lg:gap-2">
-						<div className="rounded-lg border border-dashed border-[#d7e5e3] bg-white p-6 text-center">
-							<div className="flex h-24 w-24 items-center justify-center rounded-md bg-[#f7faf9] text-[10px] text-[#8a9a9a]">
-								QR code
-							</div>
-							<p className="mt-3 text-xs text-[#5d6163]">Share in person</p>
 						</div>
 					</div>
 				</div>
@@ -516,7 +553,7 @@ export function AccountReferrals({ data }: AccountReferralsProps) {
 						{data.earnings.map((earning) => (
 							<li
 								key={earning.id}
-								className="grid gap-2 px-6 py-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center sm:gap-6"
+								className="grid gap-2 px-6 py-4 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-center sm:gap-6"
 							>
 								<div className="min-w-0">
 									<p className="truncate text-sm font-semibold text-[#576363]">
@@ -538,6 +575,19 @@ export function AccountReferrals({ data }: AccountReferralsProps) {
 								<p className="text-sm font-semibold text-[#2e8f5b] sm:text-right">
 									+{formatUsd(earning.amountUsd)}
 								</p>
+								{earning.status === "Pending" ? (
+									<Button
+										type="button"
+										size="sm"
+										onClick={() => claim(earning.id)}
+										disabled={isPending}
+										className="sm:justify-self-end"
+									>
+										{claimingId === earning.id ? "Claiming…" : "Claim"}
+									</Button>
+								) : (
+									<span className="hidden sm:block" aria-hidden="true" />
+								)}
 								<Link
 									href={`/account/transactions?ref=${earning.reference}`}
 									className="text-xs font-medium text-[#3c7f80] hover:text-[#1f5556] sm:text-right"

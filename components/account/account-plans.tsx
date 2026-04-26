@@ -1,37 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { cancelInvestment, startInvestment } from "@/app/account/plans/actions";
+import type {
+	AccountPlan as InvestmentPlan,
+	AccountPlansSummary as AccountSummary,
+	ActiveAccountPlan as ActivePlan,
+} from "@/lib/account-plans";
 import { cn } from "@/lib/utils";
-
-type AccountSummary = {
-	activeInvestment: number;
-	activePlans: number;
-	availableBalance: number;
-	estimatedMonthlyReturn: number;
-};
-
-type InvestmentPlan = {
-	availability: string;
-	bestFor: string;
-	durationDays: number;
-	id: string;
-	maxInvestment: number | null;
-	minInvestment: number;
-	name: string;
-	payoutSchedule: string;
-	rate: number;
-	tag: string;
-};
-
-type ActivePlan = {
-	amount: number;
-	maturityDate: string;
-	name: string;
-	progress: number;
-	status: string;
-};
 
 type AccountPlansProps = {
 	accountSummary: AccountSummary;
@@ -48,7 +26,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 const summaryItems = [
 	{ key: "availableBalance", label: "Available Balance" },
 	{ key: "activeInvestment", label: "Active Investment" },
-	{ key: "estimatedMonthlyReturn", label: "Estimated Monthly Return" },
+	{ key: "projectedProfit", label: "Projected Profit" },
 	{ key: "activePlans", label: "Current Active Plans" },
 ] as const;
 
@@ -76,14 +54,22 @@ export function AccountPlans({
 	activePlans,
 	plans,
 }: AccountPlansProps) {
+	const [isPending, startTransition] = useTransition();
 	const [selectedPlanId, setSelectedPlanId] = useState(plans[1]?.id ?? plans[0].id);
 	const selectedPlan =
 		plans.find((plan) => plan.id === selectedPlanId) ?? plans[0];
-	const [amount, setAmount] = useState(String(selectedPlan.minInvestment));
+	const [amount, setAmount] = useState(
+		selectedPlan ? String(selectedPlan.minInvestment) : "",
+	);
 	const [acceptedTerms, setAcceptedTerms] = useState(false);
+	const [notice, setNotice] = useState<{
+		message: string;
+		tone: "error" | "success";
+	} | null>(null);
 
 	const numericAmount = Number(amount);
 	const isValidAmount =
+		selectedPlan !== undefined &&
 		Number.isFinite(numericAmount) &&
 		numericAmount >= selectedPlan.minInvestment &&
 		(selectedPlan.maxInvestment === null ||
@@ -91,6 +77,15 @@ export function AccountPlans({
 		numericAmount <= accountSummary.availableBalance;
 
 	const calculator = useMemo(() => {
+		if (!selectedPlan) {
+			return {
+				availableAfterInvestment: accountSummary.availableBalance,
+				expectedReturn: 0,
+				maturityDate: "",
+				totalPayout: 0,
+			};
+		}
+
 		const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
 		const expectedReturn = safeAmount * (selectedPlan.rate / 100);
 
@@ -106,14 +101,44 @@ export function AccountPlans({
 	}, [
 		accountSummary.availableBalance,
 		numericAmount,
-		selectedPlan.durationDays,
-		selectedPlan.rate,
+		selectedPlan,
 	]);
+
+	if (!selectedPlan) {
+		return (
+			<div className="rounded-lg border border-[#d7e5e3] bg-white p-6 text-sm text-[#5d6163] shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
+				No investment plans are available right now.
+			</div>
+		);
+	}
 
 	function selectPlan(plan: InvestmentPlan) {
 		setSelectedPlanId(plan.id);
 		setAmount(String(plan.minInvestment));
 		setAcceptedTerms(false);
+		setNotice(null);
+	}
+
+	function handleStartInvestment() {
+		setNotice(null);
+		startTransition(async () => {
+			const result = await startInvestment({
+				amountUsd: numericAmount,
+				planId: selectedPlan.id,
+			});
+
+			if (!result.ok) {
+				setNotice({ message: result.error, tone: "error" });
+				return;
+			}
+
+			setAcceptedTerms(false);
+			setAmount(String(selectedPlan.minInvestment));
+			setNotice({
+				message: "Investment started. Your plan summary is refreshing now.",
+				tone: "success",
+			});
+		});
 	}
 
 	return (
@@ -255,6 +280,9 @@ export function AccountPlans({
 											</span>{" "}
 											{plan.payoutSchedule}
 										</p>
+										{plan.description ? (
+											<p className="mt-2">{plan.description}</p>
+										) : null}
 									</div>
 
 									<div className="mt-auto pt-6">
@@ -311,6 +339,16 @@ export function AccountPlans({
 								balance.
 							</p>
 						) : null}
+						{notice ? (
+							<p
+								className={cn(
+									"mt-2 text-sm",
+									notice.tone === "error" ? "text-red-600" : "text-[#2e8f5b]",
+								)}
+							>
+								{notice.message}
+							</p>
+						) : null}
 
 						<div className="mt-5 space-y-3 rounded-md bg-[#f7faf9] p-4">
 							<div className="flex justify-between gap-4 text-sm">
@@ -352,9 +390,10 @@ export function AccountPlans({
 
 						<Button
 							className="mt-5 w-full"
-							disabled={!isValidAmount || !acceptedTerms}
+							disabled={!isValidAmount || !acceptedTerms || isPending}
+							onClick={handleStartInvestment}
 						>
-							Start Investment
+							{isPending ? "Starting..." : "Start Investment"}
 						</Button>
 					</section>
 
@@ -362,33 +401,77 @@ export function AccountPlans({
 						<h2 className="text-xl font-semibold text-[#576363]">
 							Active plans
 						</h2>
+						<p className="mt-2 text-sm text-[#5d6163]">
+							Investments can be cancelled only during the first 15 minutes
+							after they are started.
+						</p>
 						<div className="mt-5 space-y-4">
-							{activePlans.map((plan) => (
-								<div key={plan.name} className="rounded-md bg-[#f7faf9] p-4">
-									<div className="flex items-start justify-between gap-4">
-										<div>
-											<p className="font-semibold text-[#576363]">
-												{plan.name}
-											</p>
-											<p className="mt-1 text-sm text-[#5d6163]">
-												{formatCurrency(plan.amount)} invested
-											</p>
-										</div>
-										<span className="rounded-md bg-[#e5f3f1] px-2.5 py-1 text-xs font-semibold text-[#3c7f80]">
-											{plan.status}
-										</span>
-									</div>
-									<div className="mt-4 h-2 rounded-full bg-white">
-										<div
-											className="h-2 rounded-full bg-[#5F9EA0]"
-											style={{ width: `${plan.progress}%` }}
-										/>
-									</div>
-									<p className="mt-3 text-sm text-[#5d6163]">
-										Matures {plan.maturityDate}
-									</p>
+							{activePlans.length === 0 ? (
+								<div className="rounded-md bg-[#f7faf9] p-4 text-sm text-[#5d6163]">
+									You do not have any active plans yet.
 								</div>
-							))}
+							) : (
+								activePlans.map((plan) => (
+									<div key={plan.id} className="rounded-md bg-[#f7faf9] p-4">
+										<div className="flex items-start justify-between gap-4">
+											<div>
+												<p className="font-semibold text-[#576363]">
+													{plan.name}
+												</p>
+												<p className="mt-1 text-sm text-[#5d6163]">
+													{formatCurrency(plan.amount)} invested
+												</p>
+											</div>
+											<span className="rounded-md bg-[#e5f3f1] px-2.5 py-1 text-xs font-semibold text-[#3c7f80]">
+												{plan.status}
+											</span>
+										</div>
+										<div className="mt-4 h-2 rounded-full bg-white">
+											<div
+												className="h-2 rounded-full bg-[#5F9EA0]"
+												style={{ width: `${plan.progress}%` }}
+											/>
+										</div>
+										<p className="mt-3 text-sm text-[#5d6163]">
+											Matures {plan.maturityDate}
+										</p>
+										{plan.canCancel ? (
+											<Button
+												className="mt-3"
+												size="sm"
+												variant="outline"
+												disabled={isPending}
+												onClick={() => {
+													setNotice(null);
+													startTransition(async () => {
+														const result = await cancelInvestment(plan.id);
+
+														if (!result.ok) {
+															setNotice({
+																message: result.error,
+																tone: "error",
+															});
+															return;
+														}
+
+														setNotice({
+															message:
+																"Investment cancelled during the grace window. Your balance is refreshing now.",
+															tone: "success",
+														});
+													});
+												}}
+											>
+												{isPending ? "Updating..." : "Cancel Investment"}
+											</Button>
+										) : (
+											<p className="mt-3 text-xs font-medium text-[#5d6163]">
+												Cancel window expired
+											</p>
+										)}
+									</div>
+								))
+							)}
 						</div>
 					</section>
 				</aside>

@@ -1,12 +1,18 @@
+import { cookies } from "next/headers";
 import { AdminDepositsManagement } from "@/components/neocoin-admin-priv/admin-deposits-management";
-import { adminDepositsManagementData } from "@/lib/admin-deposits-management";
+import { getAdminDepositsManagementData } from "@/lib/admin-deposits-management";
+import { createClient } from "@/utils/supabase/server";
 
 export const metadata = {
 	title: "Deposits Management | Nexcoin Admin",
 	description:
-		"Review incoming deposits, confirmations, manual payments, risk notes, and funding activity.",
+		"Review incoming crypto deposits, confirmations, receiving wallets, risk notes, and funding activity.",
 };
 
-export default function AdminDepositsManagementPage() {
-    return <AdminDepositsManagement data={adminDepositsManagementData} />;
+export default async function AdminDepositsManagementPage() {
+	const cookieStore = await cookies();
+	const supabase = createClient(cookieStore);
+	const data = await getAdminDepositsManagementData(supabase);
+
+	return <AdminDepositsManagement data={data} />;
 }

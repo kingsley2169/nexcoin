@@ -20,7 +20,7 @@ This README tracks the pages planned for the crypto investment website. Check ea
 ### Authentication Pages
 
 - [x] Login Page
-- [ ] Signup Page
+- [x] Signup Page
 - [x] Forgot Password Page
 - [ ] Reset Password Page
 - [ ] Email Verification Page
@@ -44,16 +44,15 @@ This README tracks the pages planned for the crypto investment website. Check ea
 
 ### Admin Pages
 
-- [ ] Admin Login Page
+- [x] Admin Login Page
 - [x] Admin Dashboard
 - [x] User Management Page
 - [x] Investment Plan Management Page
 - [x] Deposit Management Page
 - [x] Withdrawal Management Page
-- [ ] Transaction Management Page
-- [ ] KYC Review Page
-- [ ] Support Management Page
-- [ ] Site Content Settings Page
+- [x] Transaction Management Page
+- [x] KYC Review Page
+- [x] Support Management Page
 
 ## Page Details
 
@@ -89,11 +88,11 @@ This README tracks the pages planned for the crypto investment website. Check ea
 | --- | --- | --- |
 | Dashboard Overview | Shows account balance, invested amount, profits, active plans, and recent activity. | To review |
 | Portfolio Page | Shows the user's current investments, plan performance, crypto holdings, and profit history. | To review |
-| Deposit Page | Lets users fund their account with supported crypto assets or payment methods. | To review |
+| Deposit Page | Lets users fund their account with supported crypto assets. | To review |
 | Withdrawal Page | Lets users request withdrawals and manage withdrawal wallet addresses. | To review |
 | Investment Plans / Subscribe Page | Lets logged-in users choose and activate an investment plan. | To review |
 | Transactions Page | Shows deposits, withdrawals, investments, profits, fees, and status history. | To review |
-| Wallets Page | Shows supported wallet balances and deposit addresses. | To review |
+| Wallets Page | Lets users save, review, set defaults for, and remove withdrawal wallet addresses. | To review |
 | Referrals Page | Shows referral link, referred users, bonuses, and referral earnings. | To review |
 | Notifications Page | Shows account alerts, investment updates, withdrawal status, and security notices. | To review |
 | Profile Page | Lets users manage personal information and account details. | To review |
@@ -116,7 +115,58 @@ These may be needed if the platform will have staff managing users, transactions
 | Transaction Management Page | Lets admins inspect all financial activity across the platform. | To review |
 | KYC Review Page | Lets admins approve or reject submitted identity documents. | To review |
 | Support Management Page | Lets admins respond to user support tickets. | To review |
-| Site Content Settings Page | Lets admins update FAQs, contact details, landing page content, and legal links. | To review |
+
+## Admin Dashboard Testing Flow
+
+This is the next testing flow after KYC review. The goal is to verify that the admin dashboard is trustworthy as a control surface, not just that it renders.
+
+### Scope
+
+- Admin authentication and access guards
+- Dashboard summary cards and data integrity
+- Navigation handoff into the admin queues
+- Reflection of state changes from KYC, deposits, withdrawals, and support
+- Empty states, error states, and visual sanity
+
+### Checklist
+
+- [x] Admin user can log in and reach the dashboard
+- [x] Logged-out users are redirected to admin login
+- [x] Non-admin users are blocked from admin routes
+- [x] Admin layout, sidebar, and dashboard shell load without permission errors
+- [x] All summary cards render without crashing
+- [x] Each dashboard count matches its real backing table, view, or RPC
+- [x] Zero-value cards and empty datasets show a clean empty state
+- [x] No dashboard card is still using mock or placeholder data
+- [x] Each dashboard card or CTA opens the correct admin page
+- [x] Destination pages load with the expected default filters or tabs
+- [x] Recent activity blocks show the correct order, status, and links
+- [x] KYC actions already tested are reflected correctly on the dashboard
+- [x] Pending deposit counts match the deposit management page
+- [x] Pending withdrawal counts match the withdrawal management page
+- [x] Open support counts match the support management page
+- [x] Dashboard values update correctly after admin actions and refresh
+- [x] Long values, large counts, and empty tables do not break the layout
+- [x] One empty or failing data source does not create a confusing dashboard state
+
+### Recommended Test Order
+
+1. Admin login and access guards
+2. Dashboard shell and initial load
+3. Summary cards and source-of-truth validation
+4. Dashboard navigation links
+5. Deposit handoff
+6. Withdrawal handoff
+7. Support handoff
+8. Final refresh and consistency check
+
+### Working Method
+
+For each dashboard widget we test, confirm three things:
+
+1. What exact query, view, or RPC feeds it
+2. Whether the dashboard value matches the downstream admin page
+3. Whether the value changes correctly after an admin action
 
 ## Recommended Minimum Version
 

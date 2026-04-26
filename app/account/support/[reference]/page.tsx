@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { AccountSupportThread } from "@/components/account/account-support-thread";
 import { buttonVariants } from "@/components/ui/button";
-import { findSupportTicket } from "@/lib/support-tickets";
+import { getSupportThread } from "@/lib/support-tickets";
+import { createClient } from "@/utils/supabase/server";
 
 type PageProps = {
 	params: Promise<{ reference: string }>;
@@ -12,7 +14,9 @@ export async function generateMetadata({
 	params,
 }: PageProps): Promise<Metadata> {
 	const { reference } = await params;
-	const ticket = findSupportTicket(reference);
+	const cookieStore = await cookies();
+	const supabase = createClient(cookieStore);
+	const ticket = await getSupportThread(supabase, reference);
 
 	if (!ticket) {
 		return {
@@ -29,7 +33,9 @@ export async function generateMetadata({
 
 export default async function SupportTicketPage({ params }: PageProps) {
 	const { reference } = await params;
-	const ticket = findSupportTicket(reference);
+	const cookieStore = await cookies();
+	const supabase = createClient(cookieStore);
+	const ticket = await getSupportThread(supabase, reference);
 
 	if (!ticket) {
 		return (

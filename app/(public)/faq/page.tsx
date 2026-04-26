@@ -33,7 +33,7 @@ const faqGroups = [
 		items: [
 			{
 				answer:
-					"Nexcoin accepts Bitcoin, Ethereum, Dogecoin, cash payment, PayPal, and other supported e-currencies. Cash and PayPal deposits are intended for investors in the United States.",
+					"Nexcoin accepts crypto deposits only. Supported assets are Bitcoin, Ethereum, and USDT through the network shown on the deposit page.",
 				question: "Which deposit methods are supported?",
 			},
 			{

@@ -1,5 +1,7 @@
 import { AdminInvestmentPlans } from "@/components/neocoin-admin-priv/admin-investment-plans";
-import { adminInvestmentPlansData } from "@/lib/admin-investment-plans";
+import { cookies } from "next/headers";
+import { getAdminInvestmentPlansData } from "@/lib/admin-investment-plans";
+import { createClient } from "@/utils/supabase/server";
 
 export const metadata = {
 	title: "Investment Plan Management | Nexcoin Admin",
@@ -7,6 +9,10 @@ export const metadata = {
 		"Manage plan status, deposit ranges, returns, active investors, and plan activity.",
 };
 
-export default function AdminInvestmentPlansPage() {
-	return <AdminInvestmentPlans data={adminInvestmentPlansData} />;
+export default async function AdminInvestmentPlansPage() {
+	const cookieStore = await cookies();
+	const supabase = createClient(cookieStore);
+	const data = await getAdminInvestmentPlansData(supabase);
+
+	return <AdminInvestmentPlans data={data} />;
 }

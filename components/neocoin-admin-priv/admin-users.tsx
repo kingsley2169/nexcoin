@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import {
 	type AdminUser,
 	type AdminUserKycStatus,
@@ -9,8 +10,17 @@ import {
 	type AdminUsersData,
 	type AdminUserStatus,
 } from "@/lib/admin-users";
+import { updateAccountStatus } from "@/app/nexcoin-admin-priv/users/actions";
+import { AdminUserInvestmentModal } from "@/components/neocoin-admin-priv/admin-user-investment-modal";
+import { AdminUserTransactionsModal } from "@/components/neocoin-admin-priv/admin-user-transactions-modal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const STATUS_TO_DB: Record<AdminUserStatus, "active" | "flagged" | "suspended"> = {
+	Active: "active",
+	Flagged: "flagged",
+	Suspended: "suspended",
+};
 
 type AdminUsersProps = {
 	data: AdminUsersData;
@@ -101,11 +111,26 @@ function SearchIcon({ className }: { className?: string }) {
 }
 
 export function AdminUsers({ data }: AdminUsersProps) {
-	const [users, setUsers] = useState(data.users);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const users = data.users;
+	const [notice, setNotice] = useState<
+		{ tone: "error" | "success"; message: string } | null
+	>(null);
 	const [query, setQuery] = useState("");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 	const [kycFilter, setKycFilter] = useState<KycFilter>("all");
 	const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+	const [transactionsTarget, setTransactionsTarget] = useState<{
+		id: string;
+		name: string;
+		email: string;
+	} | null>(null);
+	const [investmentTarget, setInvestmentTarget] = useState<{
+		id: string;
+		name: string;
+		email: string;
+	} | null>(null);
 
 	const filteredUsers = useMemo(() => {
 		const trimmed = query.trim().toLowerCase();
@@ -158,9 +183,22 @@ export function AdminUsers({ data }: AdminUsersProps) {
 	}, [users]);
 
 	const updateStatus = (id: string, status: AdminUserStatus) => {
-		setUsers((current) =>
-			current.map((user) => (user.id === id ? { ...user, status } : user)),
-		);
+		if (isPending) return;
+
+		startTransition(async () => {
+			const result = await updateAccountStatus(id, STATUS_TO_DB[status]);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: `User updated to ${status}.`,
+			});
+			router.refresh();
+		});
 	};
 
 	return (
@@ -177,19 +215,34 @@ export function AdminUsers({ data }: AdminUsersProps) {
 				</div>
 				<div className="flex flex-wrap gap-3">
 					<Link
-						href="/neocoin-admin-priv/kyc-review"
+						href="/nexcoin-admin-priv/kyc-review"
 						className={buttonVariants({ size: "md" })}
 					>
 						KYC Queue
 					</Link>
 					<Link
-						href="/neocoin-admin-priv/support-management"
+						href="/nexcoin-admin-priv/support"
 						className={buttonVariants({ size: "md", variant: "outline" })}
 					>
 						Support Tickets
 					</Link>
 				</div>
 			</header>
+
+			{notice ? (
+				<div
+					role="status"
+					aria-live="polite"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
+				>
+					{notice.message}
+				</div>
+			) : null}
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				<SummaryCard
@@ -285,7 +338,26 @@ export function AdminUsers({ data }: AdminUsersProps) {
 						</div>
 					) : (
 						filteredUsers.map((user) => (
-							<UserRow key={user.id} onUpdateStatus={updateStatus} user={user} />
+							<UserRow
+								key={user.id}
+								isPending={isPending}
+								onUpdateStatus={updateStatus}
+								onManageTransactions={() =>
+									setTransactionsTarget({
+										email: user.email,
+										id: user.id,
+										name: user.name,
+									})
+								}
+								onManageInvestments={() =>
+									setInvestmentTarget({
+										email: user.email,
+										id: user.id,
+										name: user.name,
+									})
+								}
+								user={user}
+							/>
 						))
 					)}
 				</div>
@@ -309,6 +381,20 @@ export function AdminUsers({ data }: AdminUsersProps) {
 					tone="positive"
 				/>
 			</section>
+
+			{transactionsTarget ? (
+				<AdminUserTransactionsModal
+					onClose={() => setTransactionsTarget(null)}
+					user={transactionsTarget}
+				/>
+			) : null}
+
+			{investmentTarget ? (
+				<AdminUserInvestmentModal
+					onClose={() => setInvestmentTarget(null)}
+					user={investmentTarget}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -369,9 +455,15 @@ function FilterButton({
 }
 
 function UserRow({
+	isPending,
+	onManageInvestments,
+	onManageTransactions,
 	onUpdateStatus,
 	user,
 }: {
+	isPending: boolean;
+	onManageInvestments: () => void;
+	onManageTransactions: () => void;
 	onUpdateStatus: (id: string, status: AdminUserStatus) => void;
 	user: AdminUser;
 }) {
@@ -439,6 +531,7 @@ function UserRow({
 					type="button"
 					size="sm"
 					variant="outline"
+					disabled={isPending}
 					onClick={() =>
 						onUpdateStatus(
 							user.id,
@@ -452,11 +545,30 @@ function UserRow({
 					type="button"
 					size="sm"
 					variant="secondary"
+					disabled={isPending}
 					onClick={() =>
 						onUpdateStatus(user.id, user.status === "Flagged" ? "Active" : "Flagged")
 					}
 				>
 					{user.status === "Flagged" ? "Clear Flag" : "Flag"}
+				</Button>
+				<Button
+					type="button"
+					size="sm"
+					variant="primary"
+					disabled={isPending}
+					onClick={onManageTransactions}
+				>
+					Manage Transactions
+				</Button>
+				<Button
+					type="button"
+					size="sm"
+					variant="secondary"
+					disabled={isPending}
+					onClick={onManageInvestments}
+				>
+					Add Investment
 				</Button>
 			</div>
 		</div>

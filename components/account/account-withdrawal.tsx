@@ -1,15 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
 	type SavedAddress,
 	type WithdrawalData,
-	type WithdrawalRequest,
 	type WithdrawalStatus,
 } from "@/lib/withdrawals";
+import {
+	addWallet,
+	removeWallet,
+	setDefaultWallet,
+} from "@/app/account/wallets/actions";
+import { createWithdrawal } from "@/app/account/withdrawal/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+type WalletAssetKey = "BTC" | "ETH" | "USDT";
+
+const ASSET_KEY_BY_ID: Record<string, WalletAssetKey> = {
+	btc: "BTC",
+	eth: "ETH",
+	usdt: "USDT",
+};
 
 type AccountWithdrawalProps = {
 	data: WithdrawalData;
@@ -64,28 +78,20 @@ function pickDefaultAddress(addresses: SavedAddress[], assetId: string) {
 	);
 }
 
-function generateReference(existing: WithdrawalRequest[]) {
-	const numbers = existing.map((item) => {
-		const match = item.reference.match(/\d+/);
-
-		return match ? Number(match[0]) : 0;
-	});
-	const next = Math.max(...numbers, 1040) + 1;
-
-	return `WD-${next}`;
-}
-
 export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
-	const [addresses, setAddresses] = useState(data.savedAddresses);
-	const [withdrawals, setWithdrawals] = useState(data.recentWithdrawals);
-	const [selectedAssetId, setSelectedAssetId] = useState(data.assets[0].id);
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const addresses = data.savedAddresses;
+	const withdrawals = data.recentWithdrawals;
+	const firstAssetId = data.assets[0]?.id ?? "";
+	const [selectedAssetId, setSelectedAssetId] = useState(firstAssetId);
 	const [addressMode, setAddressMode] = useState<"saved" | "new">(() => {
-		const match = pickDefaultAddress(data.savedAddresses, data.assets[0].id);
+		const match = pickDefaultAddress(addresses, firstAssetId);
 
 		return match ? "saved" : "new";
 	});
 	const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
-		() => pickDefaultAddress(data.savedAddresses, data.assets[0].id)?.id ?? null,
+		() => pickDefaultAddress(addresses, firstAssetId)?.id ?? null,
 	);
 	const [amount, setAmount] = useState("");
 	const [newAddress, setNewAddress] = useState("");
@@ -93,11 +99,13 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 	const [twoFactorCode, setTwoFactorCode] = useState("");
 	const [acceptedTerms, setAcceptedTerms] = useState(false);
 	const [saveNewAddress, setSaveNewAddress] = useState(false);
-	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const [notice, setNotice] = useState<
+		{ tone: "success" | "error"; message: string } | null
+	>(null);
 	const [isAdding, setIsAdding] = useState(false);
 	const [addDraft, setAddDraft] = useState({
 		address: "",
-		assetId: data.assets[0].id,
+		assetId: firstAssetId,
 		label: "",
 	});
 
@@ -158,14 +166,14 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 		acceptedTerms;
 
 	useEffect(() => {
-		if (!successMessage) {
+		if (!notice || notice.tone !== "success") {
 			return;
 		}
 
-		const id = window.setTimeout(() => setSuccessMessage(null), 4000);
+		const id = window.setTimeout(() => setNotice(null), 4000);
 
 		return () => window.clearTimeout(id);
-	}, [successMessage]);
+	}, [notice]);
 
 	function handleAssetChange(assetId: string) {
 		setSelectedAssetId(assetId);
@@ -183,33 +191,43 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 	}
 
 	function handleSetDefault(addressId: string) {
-		setAddresses((current) =>
-			current.map((item) => {
-				if (item.id === addressId) {
-					return { ...item, isDefault: true };
-				}
+		if (isPending) return;
 
-				const target = current.find((entry) => entry.id === addressId);
+		startTransition(async () => {
+			const result = await setDefaultWallet(addressId);
 
-				if (target && item.assetId === target.assetId) {
-					return { ...item, isDefault: false };
-				}
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
 
-				return item;
-			}),
-		);
+			setNotice({ tone: "success", message: "Default address updated." });
+			router.refresh();
+		});
 	}
 
 	function handleRemove(addressId: string) {
-		setAddresses((current) => current.filter((item) => item.id !== addressId));
+		if (isPending) return;
 
-		if (selectedAddressId === addressId) {
-			const remaining = addresses.filter(
-				(item) => item.id !== addressId && item.assetId === selectedAsset.id,
-			);
-			setSelectedAddressId(remaining[0]?.id ?? null);
-			setAddressMode(remaining.length > 0 ? "saved" : "new");
-		}
+		startTransition(async () => {
+			const result = await removeWallet(addressId);
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			if (selectedAddressId === addressId) {
+				const remaining = addresses.filter(
+					(item) => item.id !== addressId && item.assetId === selectedAsset.id,
+				);
+				setSelectedAddressId(remaining[0]?.id ?? null);
+				setAddressMode(remaining.length > 0 ? "saved" : "new");
+			}
+
+			setNotice({ tone: "success", message: "Address removed." });
+			router.refresh();
+		});
 	}
 
 	function handleAddAddress(event: React.FormEvent<HTMLFormElement>) {
@@ -217,88 +235,134 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 
 		if (
 			addDraft.label.trim().length < 2 ||
-			addDraft.address.trim().length < 20
+			addDraft.address.trim().length < 20 ||
+			isPending
 		) {
 			return;
 		}
 
 		const asset =
 			data.assets.find((item) => item.id === addDraft.assetId) ?? data.assets[0];
-		const id = `addr-${Date.now()}`;
-		const hasExisting = addresses.some((item) => item.assetId === asset.id);
+		const assetKey = ASSET_KEY_BY_ID[asset.id];
 
-		setAddresses((current) => [
-			...current,
-			{
+		if (!assetKey) {
+			setNotice({ tone: "error", message: "Unsupported asset." });
+			return;
+		}
+
+		startTransition(async () => {
+			const result = await addWallet({
 				address: addDraft.address.trim(),
-				assetId: asset.id,
-				id,
-				isDefault: !hasExisting,
+				asset: assetKey,
 				label: addDraft.label.trim(),
 				network: asset.network,
-			},
-		]);
-		setAddDraft({ address: "", assetId: data.assets[0].id, label: "" });
-		setIsAdding(false);
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({ tone: "success", message: "Address saved." });
+			setAddDraft({ address: "", assetId: firstAssetId, label: "" });
+			setIsAdding(false);
+			router.refresh();
+		});
 	}
 
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 
-		if (!canSubmit) {
+		if (!canSubmit || isPending) {
 			return;
 		}
 
-		const destinationAddress =
-			addressMode === "saved" && selectedAddress
-				? selectedAddress.address
-				: newAddress.trim();
-		const reference = generateReference(withdrawals);
+		if (addressMode === "new") {
+			const trimmedAddress = newAddress.trim();
+			const trimmedLabel = newLabel.trim();
+			const assetKey = ASSET_KEY_BY_ID[selectedAsset.id];
 
-		if (
-			addressMode === "new" &&
-			saveNewAddress &&
-			newLabel.trim().length >= 2
-		) {
-			const id = `addr-${Date.now()}`;
-			const hasExisting = addresses.some(
-				(item) => item.assetId === selectedAsset.id,
-			);
-			setAddresses((current) => [
-				...current,
-				{
-					address: destinationAddress,
-					assetId: selectedAsset.id,
-					id,
-					isDefault: !hasExisting,
-					label: newLabel.trim(),
+			if (!saveNewAddress) {
+				setNotice({
+					tone: "error",
+					message:
+						"Save the address first by checking 'Save this address', then submit.",
+				});
+				return;
+			}
+
+			if (trimmedLabel.length < 2) {
+				setNotice({ tone: "error", message: "Add a label to save the address." });
+				return;
+			}
+
+			if (!assetKey) {
+				setNotice({ tone: "error", message: "Unsupported asset." });
+				return;
+			}
+
+			startTransition(async () => {
+				const saveResult = await addWallet({
+					address: trimmedAddress,
+					asset: assetKey,
+					label: trimmedLabel,
 					network: selectedAsset.network,
-				},
-			]);
+				});
+
+				if (!saveResult.ok) {
+					setNotice({ tone: "error", message: saveResult.error });
+					return;
+				}
+
+				setNotice({
+					tone: "success",
+					message:
+						"Address saved. Switch to 'Saved address' and select it to confirm the withdrawal.",
+				});
+				setSaveNewAddress(false);
+				setNewLabel("");
+				setNewAddress("");
+				setAddressMode("saved");
+				router.refresh();
+			});
+			return;
 		}
 
-		setWithdrawals((current) => [
-			{
-				addressMasked: maskAddress(destinationAddress),
-				amount: numericAmount,
-				assetSymbol: selectedAsset.symbol,
-				createdAt: new Date().toISOString(),
-				id: `wd-${Date.now()}`,
-				reference,
-				status: "Pending",
-			},
-			...current,
-		]);
+		if (!selectedAddress) {
+			setNotice({ tone: "error", message: "Choose a saved address." });
+			return;
+		}
 
-		setSuccessMessage(
-			`${reference} queued — ${formatAssetAmount(numericAmount)} ${selectedAsset.symbol} to ${maskAddress(destinationAddress)}.`,
-		);
-		setAmount("");
-		setNewAddress("");
-		setNewLabel("");
-		setTwoFactorCode("");
-		setAcceptedTerms(false);
-		setSaveNewAddress(false);
+		const destinationAddress = selectedAddress.address;
+		const addressId = selectedAddress.id;
+
+		startTransition(async () => {
+			const result = await createWithdrawal({
+				addressId,
+				amount: numericAmount,
+				amountUsd,
+				feeCrypto: networkFeeCrypto + nexcoinFeeCrypto,
+				feeUsd: (networkFeeCrypto + nexcoinFeeCrypto) * selectedAsset.rateUsd,
+				rateUsd: selectedAsset.rateUsd,
+			});
+
+			if (!result.ok) {
+				setNotice({ tone: "error", message: result.error });
+				return;
+			}
+
+			setNotice({
+				tone: "success",
+				message: `${result.reference} queued — ${formatAssetAmount(numericAmount)} ${selectedAsset.symbol} to ${maskAddress(destinationAddress)}.`,
+			});
+			setAmount("");
+			setNewAddress("");
+			setNewLabel("");
+			setTwoFactorCode("");
+			setAcceptedTerms(false);
+			setSaveNewAddress(false);
+			router.refresh();
+		});
 	}
 
 	return (
@@ -326,13 +390,18 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 				</div>
 			</section>
 
-			{successMessage ? (
+			{notice ? (
 				<div
 					role="status"
 					aria-live="polite"
-					className="rounded-md border border-[#c7ebd2] bg-[#e6f3ec] px-4 py-3 text-sm font-semibold text-[#2e8f5b]"
+					className={cn(
+						"rounded-md border px-4 py-3 text-sm font-semibold",
+						notice.tone === "success"
+							? "border-[#c7ebd2] bg-[#e6f3ec] text-[#2e8f5b]"
+							: "border-[#f2c5c0] bg-[#fff7f6] text-[#b1423a]",
+					)}
 				>
-					{successMessage}
+					{notice.message}
 				</div>
 			) : null}
 
@@ -536,8 +605,8 @@ export function AccountWithdrawal({ data }: AccountWithdrawalProps) {
 						</div>
 
 						<div className="mt-6 flex justify-end">
-							<Button type="submit" disabled={!canSubmit}>
-								Confirm withdrawal
+							<Button type="submit" disabled={!canSubmit || isPending}>
+								{isPending ? "Submitting…" : "Confirm withdrawal"}
 							</Button>
 						</div>
 					</form>

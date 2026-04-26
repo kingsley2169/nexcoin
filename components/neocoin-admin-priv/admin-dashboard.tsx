@@ -104,7 +104,7 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
 						Review Withdrawals
 					</Link>
 					<Link
-						href="/neocoin-admin-priv/kyc"
+						href="/nexcoin-admin-priv/kyc-review"
 						className={buttonVariants({ size: "md", variant: "outline" })}
 					>
 						KYC Queue
@@ -113,20 +113,28 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
 			</header>
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-				{data.metrics.map((metric) => (
-					<div
-						key={metric.label}
-						className="rounded-lg border border-[#d7e5e3] bg-white p-5 shadow-[0_18px_50px_rgba(87,99,99,0.08)]"
-					>
-						<p className="text-sm text-[#5d6163]">{metric.label}</p>
-						<p className="mt-2 text-2xl font-semibold text-[#576363]">
-							{metric.value}
-						</p>
-						<p className={cn("mt-2 text-sm", metricToneClasses[metric.tone])}>
-							{metric.hint}
-						</p>
-					</div>
-				))}
+				{data.metrics.length > 0 ? (
+					data.metrics.map((metric) => (
+						<div
+							key={metric.label}
+							className="rounded-lg border border-[#d7e5e3] bg-white p-5 shadow-[0_18px_50px_rgba(87,99,99,0.08)]"
+						>
+							<p className="text-sm text-[#5d6163]">{metric.label}</p>
+							<p className="mt-2 text-2xl font-semibold text-[#576363]">
+								{metric.value}
+							</p>
+							<p className={cn("mt-2 text-sm", metricToneClasses[metric.tone])}>
+								{metric.hint}
+							</p>
+						</div>
+					))
+				) : (
+					<EmptySection
+						className="md:col-span-2 xl:col-span-3 2xl:col-span-6"
+						message="Dashboard metrics will appear once admin reporting data is available."
+						title="No summary metrics yet"
+					/>
+				)}
 			</section>
 
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -158,44 +166,51 @@ function ReviewQueue({ data }: AdminDashboardProps) {
 					</p>
 				</div>
 				<Link
-					href="/neocoin-admin-priv/support"
+					href="/nexcoin-admin-priv/support"
 					className={buttonVariants({ size: "sm", variant: "outline" })}
 				>
 					Open Queue
 				</Link>
 			</div>
 			<div className="divide-y divide-[#eef1f1]">
-				{data.queue.map((item) => (
-					<div
-						key={item.id}
-						className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
-					>
-						<div>
-							<div className="flex flex-wrap items-center gap-2">
-								<p className="font-semibold text-[#576363]">{item.title}</p>
-								<span
-									className={cn(
-										"rounded-full px-2.5 py-1 text-xs font-semibold",
-										priorityClasses[item.priority],
-									)}
-								>
-									{item.priority}
-								</span>
-							</div>
-							<p className="mt-1 text-sm leading-6 text-[#5d6163]">
-								{item.user} - {item.reference} - {item.type}
-								{item.amount ? ` - ${item.amount}` : ""}
-							</p>
-							<p className="mt-1 text-xs text-[#5d6163]">Waiting {item.age}</p>
-						</div>
-						<Link
-							href={item.href}
-							className={buttonVariants({ size: "sm", variant: "outline" })}
+				{data.queue.length > 0 ? (
+					data.queue.map((item) => (
+						<div
+							key={item.id}
+							className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
 						>
-							Review
-						</Link>
-					</div>
-				))}
+							<div>
+								<div className="flex flex-wrap items-center gap-2">
+									<p className="font-semibold text-[#576363]">{item.title}</p>
+									<span
+										className={cn(
+											"rounded-full px-2.5 py-1 text-xs font-semibold",
+											priorityClasses[item.priority],
+										)}
+									>
+										{item.priority}
+									</span>
+								</div>
+								<p className="mt-1 text-sm leading-6 text-[#5d6163]">
+									{item.user} - {item.reference} - {item.type}
+									{item.amount ? ` - ${item.amount}` : ""}
+								</p>
+								<p className="mt-1 text-xs text-[#5d6163]">Waiting {item.age}</p>
+							</div>
+							<Link
+								href={item.href}
+								className={buttonVariants({ size: "sm", variant: "outline" })}
+							>
+								Review
+							</Link>
+						</div>
+					))
+				) : (
+					<EmptySection
+						message="The highest-priority review queue is currently clear."
+						title="No items are waiting"
+					/>
+				)}
 			</div>
 		</section>
 	);
@@ -204,38 +219,53 @@ function ReviewQueue({ data }: AdminDashboardProps) {
 function FinancialSnapshots({ data }: AdminDashboardProps) {
 	return (
 		<section className="grid gap-6 lg:grid-cols-2">
-			{data.financialSnapshots.map((snapshot) => (
-				<div
-					key={snapshot.title}
-					className="rounded-lg border border-[#d7e5e3] bg-white shadow-[0_18px_50px_rgba(87,99,99,0.08)]"
-				>
-					<div className="border-b border-[#d7e5e3] p-5">
-						<p className="text-sm text-[#5d6163]">{snapshot.title}</p>
-						<p className="mt-2 text-2xl font-semibold text-[#576363]">
-							{snapshot.total}
+			{data.financialSnapshots.length > 0 ? (
+				data.financialSnapshots.map((snapshot) => (
+					<div
+						key={snapshot.title}
+						className="rounded-lg border border-[#d7e5e3] bg-white shadow-[0_18px_50px_rgba(87,99,99,0.08)]"
+					>
+						<div className="border-b border-[#d7e5e3] p-5">
+							<p className="text-sm text-[#5d6163]">{snapshot.title}</p>
+							<p className="mt-2 text-2xl font-semibold text-[#576363]">
+								{snapshot.total}
+							</p>
+						</div>
+						<div className="divide-y divide-[#eef1f1]">
+							{snapshot.breakdown.length > 0 ? (
+								snapshot.breakdown.map((item) => (
+									<div
+										key={item.label}
+										className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4"
+									>
+										<div>
+											<p className="font-semibold text-[#576363]">{item.label}</p>
+											<p className="mt-1 text-sm text-[#5d6163]">
+												{item.count} requests
+											</p>
+										</div>
+										<p className="font-semibold text-[#576363]">{item.value}</p>
+									</div>
+								))
+							) : (
+								<EmptySection
+									message="This operational summary has no line items yet."
+									title="No breakdown available"
+								/>
+							)}
+						</div>
+						<p className="border-t border-[#eef1f1] p-4 text-sm text-[#5d6163]">
+							{snapshot.footer}
 						</p>
 					</div>
-					<div className="divide-y divide-[#eef1f1]">
-						{snapshot.breakdown.map((item) => (
-							<div
-								key={item.label}
-								className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4"
-							>
-								<div>
-									<p className="font-semibold text-[#576363]">{item.label}</p>
-									<p className="mt-1 text-sm text-[#5d6163]">
-										{item.count} requests
-									</p>
-								</div>
-								<p className="font-semibold text-[#576363]">{item.value}</p>
-							</div>
-						))}
-					</div>
-					<p className="border-t border-[#eef1f1] p-4 text-sm text-[#5d6163]">
-						{snapshot.footer}
-					</p>
-				</div>
-			))}
+				))
+			) : (
+				<EmptySection
+					className="lg:col-span-2"
+					message="Deposit and withdrawal snapshot cards will appear here once reporting is available."
+					title="No financial snapshots yet"
+				/>
+			)}
 		</section>
 	);
 }
@@ -259,17 +289,21 @@ function InvestmentOverview({ data }: AdminDashboardProps) {
 				</div>
 			</div>
 			<div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-				<InfoTile label="Active plans" value={overview.activePlans} />
-				<InfoTile label="Total invested" value={overview.totalInvested} />
-				<InfoTile
-					label="Profit credited today"
-					value={overview.profitCreditedToday}
-				/>
-				<InfoTile
-					label="Maturing today"
-					value={String(overview.maturingToday)}
-				/>
-				<InfoTile label="Most popular" value={overview.mostPopularPlan} />
+				{[
+					{ label: "Active plans", value: overview.activePlans },
+					{ label: "Total invested", value: overview.totalInvested },
+					{
+						label: "Profit credited today",
+						value: overview.profitCreditedToday,
+					},
+					{
+						label: "Maturing today",
+						value: String(overview.maturingToday),
+					},
+					{ label: "Most popular", value: overview.mostPopularPlan },
+				].map((item) => (
+					<InfoTile key={item.label} label={item.label} value={item.value} />
+				))}
 			</div>
 		</section>
 	);
@@ -287,32 +321,39 @@ function RecentActivity({ data }: AdminDashboardProps) {
 				</p>
 			</div>
 			<div className="divide-y divide-[#eef1f1]">
-				{data.activity.map((item) => (
-					<div
-						key={item.id}
-						className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_auto]"
-					>
-						<div>
-							<div className="flex flex-wrap items-center gap-2">
-								<p className="font-semibold text-[#576363]">{item.title}</p>
-								<span
-									className={cn(
-										"rounded-full px-2.5 py-1 text-xs font-semibold",
-										activityStatusClasses[item.status],
-									)}
-								>
-									{item.status}
-								</span>
+				{data.activity.length > 0 ? (
+					data.activity.map((item) => (
+						<div
+							key={item.id}
+							className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_auto]"
+						>
+							<div>
+								<div className="flex flex-wrap items-center gap-2">
+									<p className="font-semibold text-[#576363]">{item.title}</p>
+									<span
+										className={cn(
+											"rounded-full px-2.5 py-1 text-xs font-semibold",
+											activityStatusClasses[item.status],
+										)}
+									>
+										{item.status}
+									</span>
+								</div>
+								<p className="mt-1 text-sm text-[#5d6163]">
+									{item.user} - {item.reference}
+								</p>
 							</div>
-							<p className="mt-1 text-sm text-[#5d6163]">
-								{item.user} - {item.reference}
+							<p className="text-sm text-[#5d6163] sm:text-right">
+								{formatDateTime(item.createdAt)}
 							</p>
 						</div>
-						<p className="text-sm text-[#5d6163] sm:text-right">
-							{formatDateTime(item.createdAt)}
-						</p>
-					</div>
-				))}
+					))
+				) : (
+					<EmptySection
+						message="New admin-relevant activity will appear here as the platform starts moving."
+						title="No recent activity"
+					/>
+				)}
 			</div>
 		</section>
 	);
@@ -335,30 +376,37 @@ function RiskAlerts({ data }: AdminDashboardProps) {
 				</div>
 			</div>
 			<div className="mt-5 space-y-4">
-				{data.riskAlerts.map((alert) => (
-					<div key={alert.id} className="rounded-lg border border-[#eef1f1] p-4">
-						<div className="flex flex-wrap items-center gap-2">
-							<p className="font-semibold text-[#576363]">{alert.title}</p>
-							<span
-								className={cn(
-									"rounded-full px-2.5 py-1 text-xs font-semibold",
-									priorityClasses[alert.severity],
-								)}
+				{data.riskAlerts.length > 0 ? (
+					data.riskAlerts.map((alert) => (
+						<div key={alert.id} className="rounded-lg border border-[#eef1f1] p-4">
+							<div className="flex flex-wrap items-center gap-2">
+								<p className="font-semibold text-[#576363]">{alert.title}</p>
+								<span
+									className={cn(
+										"rounded-full px-2.5 py-1 text-xs font-semibold",
+										priorityClasses[alert.severity],
+									)}
+								>
+									{alert.severity}
+								</span>
+							</div>
+							<p className="mt-2 text-sm leading-6 text-[#5d6163]">
+								{alert.description}
+							</p>
+							<Link
+								href={alert.href}
+								className="mt-3 inline-flex text-sm font-semibold text-[#3c7f80] hover:text-[#1f5556]"
 							>
-								{alert.severity}
-							</span>
+								Review alert
+							</Link>
 						</div>
-						<p className="mt-2 text-sm leading-6 text-[#5d6163]">
-							{alert.description}
-						</p>
-						<Link
-							href={alert.href}
-							className="mt-3 inline-flex text-sm font-semibold text-[#3c7f80] hover:text-[#1f5556]"
-						>
-							Review alert
-						</Link>
-					</div>
-				))}
+					))
+				) : (
+					<EmptySection
+						message="No urgent risk alerts are active right now."
+						title="Risk queue is clear"
+					/>
+				)}
 			</div>
 		</section>
 	);
@@ -371,14 +419,42 @@ function ShiftNotes({ data }: AdminDashboardProps) {
 				Shift summary
 			</h2>
 			<ul className="mt-4 space-y-3">
-				{data.shiftNotes.map((note) => (
-					<li key={note} className="flex gap-3 text-sm leading-6 text-[#5d6163]">
-						<span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#5F9EA0]" />
-						<span>{note}</span>
+				{data.shiftNotes.length > 0 ? (
+					data.shiftNotes.map((note) => (
+						<li key={note} className="flex gap-3 text-sm leading-6 text-[#5d6163]">
+							<span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#5F9EA0]" />
+							<span>{note}</span>
+						</li>
+					))
+				) : (
+					<li className="text-sm leading-6 text-[#5d6163]">
+						No handoff notes have been added for this shift.
 					</li>
-				))}
+				)}
 			</ul>
 		</section>
+	);
+}
+
+function EmptySection({
+	className,
+	message,
+	title,
+}: {
+	className?: string;
+	message: string;
+	title: string;
+}) {
+	return (
+		<div
+			className={cn(
+				"rounded-lg border border-dashed border-[#d7e5e3] bg-[#f7faf9] p-5 text-sm shadow-[0_18px_50px_rgba(87,99,99,0.04)]",
+				className,
+			)}
+		>
+			<p className="font-semibold text-[#576363]">{title}</p>
+			<p className="mt-2 leading-6 text-[#5d6163]">{message}</p>
+		</div>
 	);
 }
 

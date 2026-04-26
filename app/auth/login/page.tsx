@@ -1,12 +1,25 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/password-input";
+import { signIn } from "./actions";
 
 export const metadata = {
   title: "Login | Nexcoin",
   description: "Log in to your Nexcoin investment account.",
 };
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<{
+    error?: string;
+    success?: string;
+  }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const errorMessage = params?.error;
+  const successMessage = params?.success;
+
   return (
     <main className="min-h-screen bg-[#f7faf9] text-[#576363]">
       <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-8 px-6 py-10 lg:px-10">
@@ -51,7 +64,19 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <form className="mt-8 space-y-5">
+            {errorMessage ? (
+              <p className="mt-6 rounded-md border border-[#f2c5c0] bg-[#fff7f6] px-4 py-3 text-sm font-medium text-[#b1423a]">
+                {errorMessage}
+              </p>
+            ) : null}
+
+            {successMessage ? (
+              <p className="mt-6 rounded-md border border-[#c7e4d5] bg-[#f1fbf6] px-4 py-3 text-sm font-medium text-[#2e8f5b]">
+                {successMessage}
+              </p>
+            ) : null}
+
+            <form action={signIn} className="mt-8 space-y-5">
               <div>
                 <label
                   htmlFor="email"
@@ -85,15 +110,15 @@ export default function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="Enter your password"
-                  className="mt-2 h-12 w-full rounded-md border border-[#cfdcda] bg-white px-4 text-base text-[#576363] outline-none transition focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
-                />
+                <div className="mt-2">
+                  <PasswordInput
+                    id="password"
+                    name="password"
+                    autoComplete="current-password"
+                    required
+                    placeholder="Enter your password"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-3">

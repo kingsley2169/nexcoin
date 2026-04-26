@@ -1,20 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
 	type Profile,
 	type ProfilePreferences,
 	type VerificationStatus,
 	countryOptions,
-	currencyOptions,
-	dateFormatOptions,
-	densityOptions,
-	languageOptions,
 	timezoneOptions,
 } from "@/lib/profile";
+import { updateProfile } from "@/app/account/profile/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const CURRENCY_TO_DB: Record<
+	ProfilePreferences["displayCurrency"],
+	"eur" | "gbp" | "ngn" | "usd"
+> = {
+	EUR: "eur",
+	GBP: "gbp",
+	NGN: "ngn",
+	USD: "usd",
+};
 
 type AccountProfileProps = {
 	profile: Profile;
@@ -32,11 +40,6 @@ const verificationLabels: Record<VerificationStatus, string> = {
 	verified: "Verified account",
 };
 
-const densityLabels: Record<ProfilePreferences["dashboardDensity"], string> = {
-	comfortable: "Comfortable",
-	compact: "Compact",
-};
-
 const memberSinceFormatter = new Intl.DateTimeFormat("en-US", {
 	day: "numeric",
 	month: "long",
@@ -52,14 +55,23 @@ function isProfileEqual(a: Profile, b: Profile) {
 }
 
 export function AccountProfile({ profile }: AccountProfileProps) {
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
 	const [saved, setSaved] = useState<Profile>(profile);
 	const [draft, setDraft] = useState<Profile>(profile);
 	const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
 	const [savedNotice, setSavedNotice] = useState(false);
+	const [errorNotice, setErrorNotice] = useState<string | null>(null);
 	const [copiedField, setCopiedField] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const isDirty = useMemo(() => !isProfileEqual(draft, saved), [draft, saved]);
+
+	const firstNameLocked = saved.identity.firstName.trim().length > 0;
+	const lastNameLocked = saved.identity.lastName.trim().length > 0;
+	const dateOfBirthLocked = saved.identity.dateOfBirth.trim().length > 0;
+	const identityCountryLocked = saved.identity.country.trim().length > 0;
+	const usernameLocked = saved.identifiers.username.trim().length > 0;
 
 	useEffect(() => {
 		if (!savedNotice) {
@@ -101,20 +113,52 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 		}));
 	}
 
-	function updatePreferences<K extends keyof Profile["preferences"]>(
+	function updateIdentifiers<K extends keyof Profile["identifiers"]>(
 		key: K,
-		value: Profile["preferences"][K],
+		value: Profile["identifiers"][K],
 	) {
 		setDraft((current) => ({
 			...current,
-			preferences: { ...current.preferences, [key]: value },
+			identifiers: { ...current.identifiers, [key]: value },
 		}));
 	}
 
 	function handleSave(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		setSaved(draft);
-		setSavedNotice(true);
+
+		if (isPending) return;
+
+		setErrorNotice(null);
+
+		startTransition(async () => {
+			const result = await updateProfile({
+				addressCity: draft.address.city,
+				addressCountry: draft.address.country,
+				addressPostalCode: draft.address.postalCode,
+				addressState: draft.address.state,
+				addressStreet: draft.address.street,
+				country: draft.identity.country,
+				dashboardDensity: draft.preferences.dashboardDensity,
+				dateFormat: draft.preferences.dateFormat,
+				dateOfBirth: draft.identity.dateOfBirth,
+				displayCurrency: CURRENCY_TO_DB[draft.preferences.displayCurrency],
+				firstName: draft.identity.firstName,
+				language: draft.identity.language,
+				lastName: draft.identity.lastName,
+				phoneNumber: draft.identity.phone,
+				timezone: draft.identity.timezone,
+				username: draft.identifiers.username,
+			});
+
+			if (!result.ok) {
+				setErrorNotice(result.error);
+				return;
+			}
+
+			setSaved(draft);
+			setSavedNotice(true);
+			router.refresh();
+		});
 	}
 
 	function handleDiscard() {
@@ -163,7 +207,14 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-3">
-					{savedNotice ? (
+					{errorNotice ? (
+						<span
+							aria-live="polite"
+							className="rounded-md bg-[#fff7f6] px-3 py-2 text-xs font-semibold text-[#b1423a]"
+						>
+							{errorNotice}
+						</span>
+					) : savedNotice ? (
 						<span
 							aria-live="polite"
 							className="rounded-md bg-[#e6f3ec] px-3 py-2 text-xs font-semibold text-[#2e8f5b]"
@@ -175,12 +226,12 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 						type="button"
 						variant="outline"
 						onClick={handleDiscard}
-						disabled={!isDirty}
+						disabled={!isDirty || isPending}
 					>
 						Discard
 					</Button>
-					<Button type="submit" disabled={!isDirty}>
-						Save changes
+					<Button type="submit" disabled={!isDirty || isPending}>
+						{isPending ? "Saving…" : "Save changes"}
 					</Button>
 				</div>
 			</section>
@@ -248,16 +299,60 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 					description="Used on receipts, verification records, and account communications."
 					title="Personal information"
 				/>
+				{(() => {
+					const missing = [
+						!firstNameLocked && "first name",
+						!lastNameLocked && "last name",
+						!dateOfBirthLocked && "date of birth",
+						!identityCountryLocked && "country",
+					].filter((value): value is string => Boolean(value));
+
+					if (missing.length === 0) {
+						return (
+							<div className="mt-3 rounded-md bg-[#f7faf9] px-4 py-3 text-xs leading-5 text-[#5d6163]">
+								Identity fields (name, date of birth, country of residence)
+								are locked. Email is always locked — contact support to change
+								it or to correct any locked identity field.
+							</div>
+						);
+					}
+
+					return (
+						<div className="mt-3 rounded-md border border-[#f4d9aa] bg-[#fff8ec] px-4 py-3 text-xs leading-5 text-[#8a5b14]">
+							<span className="font-semibold">Action needed:</span> please fill
+							in your {missing.join(", ")} below. These identity fields lock
+							once saved — make sure they match your KYC documents.
+						</div>
+					);
+				})()}
 				<div className="mt-5 grid gap-4 sm:grid-cols-2">
-					<Field label="First name" htmlFor="identity-first-name">
+					<Field
+						label="First name"
+						htmlFor="identity-first-name"
+						hint={
+							firstNameLocked
+								? "Set during onboarding. Contact support to correct."
+								: undefined
+						}
+					>
 						<TextInput
+							disabled={firstNameLocked}
 							id="identity-first-name"
 							value={draft.identity.firstName}
 							onChange={(value) => updateIdentity("firstName", value)}
 						/>
 					</Field>
-					<Field label="Last name" htmlFor="identity-last-name">
+					<Field
+						label="Last name"
+						htmlFor="identity-last-name"
+						hint={
+							lastNameLocked
+								? "Set during onboarding. Contact support to correct."
+								: undefined
+						}
+					>
 						<TextInput
+							disabled={lastNameLocked}
 							id="identity-last-name"
 							value={draft.identity.lastName}
 							onChange={(value) => updateIdentity("lastName", value)}
@@ -266,13 +361,14 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 					<Field
 						label="Email"
 						htmlFor="identity-email"
-						hint="Changing your email triggers a verification step at sign-in."
+						hint="Email is locked. Contact support to change it."
 					>
 						<TextInput
+							disabled
 							id="identity-email"
 							type="email"
 							value={draft.identity.email}
-							onChange={(value) => updateIdentity("email", value)}
+							onChange={() => undefined}
 						/>
 					</Field>
 					<Field label="Phone" htmlFor="identity-phone">
@@ -283,23 +379,38 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 							onChange={(value) => updateIdentity("phone", value)}
 						/>
 					</Field>
-					<Field label="Date of birth" htmlFor="identity-dob">
+					<Field
+						label="Date of birth"
+						htmlFor="identity-dob"
+						hint={
+							dateOfBirthLocked
+								? "Set during onboarding. Contact support to correct."
+								: undefined
+						}
+					>
 						<TextInput
+							disabled={dateOfBirthLocked}
 							id="identity-dob"
 							type="date"
 							value={draft.identity.dateOfBirth}
 							onChange={(value) => updateIdentity("dateOfBirth", value)}
 						/>
 					</Field>
-					<Field label="Country" htmlFor="identity-country">
-						<SelectInput
+					<Field
+						label="Country"
+						htmlFor="identity-country"
+						hint={
+							identityCountryLocked
+								? "Set during onboarding. Contact support to correct."
+								: undefined
+						}
+					>
+						<SearchableSelect
+							disabled={identityCountryLocked}
 							id="identity-country"
 							value={draft.identity.country}
 							onChange={(value) => updateIdentity("country", value)}
-							options={countryOptions.map((option) => ({
-								label: option,
-								value: option,
-							}))}
+							options={countryOptions}
 						/>
 					</Field>
 					<Field label="Timezone" htmlFor="identity-timezone">
@@ -308,17 +419,6 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 							value={draft.identity.timezone}
 							onChange={(value) => updateIdentity("timezone", value)}
 							options={timezoneOptions.map((option) => ({
-								label: option,
-								value: option,
-							}))}
-						/>
-					</Field>
-					<Field label="Preferred language" htmlFor="identity-language">
-						<SelectInput
-							id="identity-language"
-							value={draft.identity.language}
-							onChange={(value) => updateIdentity("language", value)}
-							options={languageOptions.map((option) => ({
 								label: option,
 								value: option,
 							}))}
@@ -366,71 +466,11 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 						/>
 					</Field>
 					<Field label="Country" htmlFor="address-country">
-						<SelectInput
+						<SearchableSelect
 							id="address-country"
 							value={draft.address.country}
 							onChange={(value) => updateAddress("country", value)}
-							options={countryOptions.map((option) => ({
-								label: option,
-								value: option,
-							}))}
-						/>
-					</Field>
-				</div>
-			</section>
-
-			<section className="rounded-lg border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)]">
-				<SectionHeading
-					description="Control how amounts, dates, and the dashboard look for your account."
-					title="Preferences"
-				/>
-				<div className="mt-5 grid gap-4 sm:grid-cols-3">
-					<Field label="Display currency" htmlFor="preferences-currency">
-						<SelectInput
-							id="preferences-currency"
-							value={draft.preferences.displayCurrency}
-							onChange={(value) =>
-								updatePreferences(
-									"displayCurrency",
-									value as ProfilePreferences["displayCurrency"],
-								)
-							}
-							options={currencyOptions.map((option) => ({
-								label: option,
-								value: option,
-							}))}
-						/>
-					</Field>
-					<Field label="Date format" htmlFor="preferences-date">
-						<SelectInput
-							id="preferences-date"
-							value={draft.preferences.dateFormat}
-							onChange={(value) =>
-								updatePreferences(
-									"dateFormat",
-									value as ProfilePreferences["dateFormat"],
-								)
-							}
-							options={dateFormatOptions.map((option) => ({
-								label: option,
-								value: option,
-							}))}
-						/>
-					</Field>
-					<Field label="Dashboard density" htmlFor="preferences-density">
-						<SelectInput
-							id="preferences-density"
-							value={draft.preferences.dashboardDensity}
-							onChange={(value) =>
-								updatePreferences(
-									"dashboardDensity",
-									value as ProfilePreferences["dashboardDensity"],
-								)
-							}
-							options={densityOptions.map((option) => ({
-								label: densityLabels[option],
-								value: option,
-							}))}
+							options={countryOptions}
 						/>
 					</Field>
 				</div>
@@ -442,12 +482,28 @@ export function AccountProfile({ profile }: AccountProfileProps) {
 					title="Identifiers"
 				/>
 				<div className="mt-5 grid gap-4 sm:grid-cols-2">
-					<CopyField
-						copied={copiedField === "username"}
-						label="Username"
-						onCopy={() => handleCopy(draft.identifiers.username, "username")}
-						value={`@${draft.identifiers.username}`}
-					/>
+					{usernameLocked ? (
+						<CopyField
+							copied={copiedField === "username"}
+							label="Username"
+							onCopy={() => handleCopy(draft.identifiers.username, "username")}
+							value={`@${draft.identifiers.username}`}
+						/>
+					) : (
+						<Field
+							label="Username"
+							htmlFor="identifiers-username"
+							hint="3–30 lowercase characters. Letters, numbers, _ and - allowed. Set once and locked."
+						>
+							<TextInput
+								id="identifiers-username"
+								value={draft.identifiers.username}
+								onChange={(value) =>
+									updateIdentifiers("username", value.toLowerCase())
+								}
+							/>
+						</Field>
+					)}
 					<CopyField
 						copied={copiedField === "referralCode"}
 						label="Referral code"
@@ -529,11 +585,13 @@ function Field({
 }
 
 function TextInput({
+	disabled,
 	id,
 	onChange,
 	type = "text",
 	value,
 }: {
+	disabled?: boolean;
 	id: string;
 	onChange: (value: string) => void;
 	type?: string;
@@ -544,18 +602,25 @@ function TextInput({
 			id={id}
 			type={type}
 			value={value}
+			disabled={disabled}
 			onChange={(event) => onChange(event.target.value)}
-			className="h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+			className={cn(
+				"h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15",
+				disabled &&
+					"cursor-not-allowed bg-[#f7faf9] text-[#9aa5a4] focus:border-[#cfdcda] focus:ring-0",
+			)}
 		/>
 	);
 }
 
 function SelectInput({
+	disabled,
 	id,
 	onChange,
 	options,
 	value,
 }: {
+	disabled?: boolean;
 	id: string;
 	onChange: (value: string) => void;
 	options: { label: string; value: string }[];
@@ -565,8 +630,13 @@ function SelectInput({
 		<select
 			id={id}
 			value={value}
+			disabled={disabled}
 			onChange={(event) => onChange(event.target.value)}
-			className="h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15"
+			className={cn(
+				"h-11 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15",
+				disabled &&
+					"cursor-not-allowed bg-[#f7faf9] text-[#9aa5a4] focus:border-[#cfdcda] focus:ring-0",
+			)}
 		>
 			{options.map((option) => (
 				<option key={option.value} value={option.value}>
@@ -574,6 +644,138 @@ function SelectInput({
 				</option>
 			))}
 		</select>
+	);
+}
+
+function SearchableSelect({
+	disabled,
+	id,
+	onChange,
+	options,
+	value,
+}: {
+	disabled?: boolean;
+	id: string;
+	onChange: (value: string) => void;
+	options: readonly string[];
+	value: string;
+}) {
+	const [isOpen, setIsOpen] = useState(false);
+	const [search, setSearch] = useState("");
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!isOpen) return;
+
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				containerRef.current &&
+				!containerRef.current.contains(event.target as Node)
+			) {
+				setIsOpen(false);
+				setSearch("");
+			}
+		};
+
+		const handleEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setIsOpen(false);
+				setSearch("");
+			}
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		document.addEventListener("keydown", handleEscape);
+
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("keydown", handleEscape);
+		};
+	}, [isOpen]);
+
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase();
+		if (!term) return options;
+		return options.filter((option) => option.toLowerCase().includes(term));
+	}, [options, search]);
+
+	const select = (next: string) => {
+		onChange(next);
+		setIsOpen(false);
+		setSearch("");
+	};
+
+	return (
+		<div ref={containerRef} className="relative">
+			<button
+				type="button"
+				id={id}
+				disabled={disabled}
+				onClick={() => setIsOpen((current) => !current)}
+				className={cn(
+					"flex h-11 w-full items-center justify-between rounded-md border border-[#cfdcda] bg-white px-3 text-left text-sm text-[#576363] outline-none focus:border-[#5F9EA0] focus:ring-4 focus:ring-[#5F9EA0]/15",
+					disabled &&
+						"cursor-not-allowed bg-[#f7faf9] text-[#9aa5a4] focus:border-[#cfdcda] focus:ring-0",
+				)}
+			>
+				<span className={cn(!value && "text-[#9aa5a4]")}>
+					{value || "Select…"}
+				</span>
+				<svg
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+					className={cn(
+						"h-4 w-4 shrink-0 transition",
+						isOpen && "rotate-180",
+					)}
+					fill="none"
+					stroke="currentColor"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth="2"
+				>
+					<path d="m6 9 6 6 6-6" />
+				</svg>
+			</button>
+
+			{isOpen ? (
+				<div className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border border-[#d7e5e3] bg-white shadow-[0_18px_50px_rgba(87,99,99,0.18)]">
+					<div className="border-b border-[#eef1f0] p-2">
+						<input
+							type="text"
+							autoFocus
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder="Search…"
+							className="h-9 w-full rounded-md border border-[#cfdcda] bg-white px-3 text-sm text-[#576363] outline-none focus:border-[#5F9EA0]"
+						/>
+					</div>
+					<ul className="max-h-60 overflow-y-auto">
+						{filtered.length === 0 ? (
+							<li className="px-3 py-2 text-sm text-[#5d6163]">No matches</li>
+						) : (
+							filtered.map((option) => (
+								<li key={option}>
+									<button
+										type="button"
+										onClick={() => select(option)}
+										className={cn(
+											"flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[#576363] hover:bg-[#f7faf9]",
+											option === value && "bg-[#eef6f5] font-semibold",
+										)}
+									>
+										<span>{option}</span>
+										{option === value ? (
+											<span className="text-[#5F9EA0]">✓</span>
+										) : null}
+									</button>
+								</li>
+							))
+						)}
+					</ul>
+				</div>
+			) : null}
+		</div>
 	);
 }
 
