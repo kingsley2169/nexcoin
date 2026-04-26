@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type InvestmentPlan = {
 	description: string;
 	duration: string;
@@ -9,6 +11,20 @@ export type InvestmentPlan = {
 	tag: string;
 };
 
+export type PublicInvestmentPlan = {
+	id: string;
+	name: string;
+	tag: string;
+	minDepositUsd: number;
+	maxDepositUsd: number | null;
+	returnRatePercent: number;
+	durationHours: number;
+	description: string;
+	features: string[];
+	highlight: boolean;
+};
+
+// Legacy static plans for fallback
 export const investmentPlans: InvestmentPlan[] = [
 	{
 		description:
@@ -75,3 +91,51 @@ export const investmentPlans: InvestmentPlan[] = [
 		tag: "Premium",
 	},
 ];
+
+export async function getPublicInvestmentPlans(): Promise<PublicInvestmentPlan[]> {
+	try {
+		// Import supabase client dynamically to avoid server/client issues
+		const { createClient } = await import("@/utils/supabase/server");
+		const { cookies } = await import("next/headers");
+		const supabase = createClient(await cookies());
+
+		const { data, error } = await supabase
+			.from("investment_plans")
+			.select(`
+				id,
+				name,
+				tag,
+				min_deposit_usd,
+				max_deposit_usd,
+				return_rate_percent,
+				duration_hours,
+				description,
+				features,
+				highlight
+			`)
+			.eq("status", "active")
+			.order("min_deposit_usd");
+
+		if (error) {
+			console.error("Error fetching investment plans:", error);
+			// Return empty array, will fallback to static plans
+			return [];
+		}
+
+		return (data || []).map((plan: any) => ({
+			id: plan.id,
+			name: plan.name,
+			tag: plan.tag,
+			minDepositUsd: plan.min_deposit_usd,
+			maxDepositUsd: plan.max_deposit_usd,
+			returnRatePercent: plan.return_rate_percent,
+			durationHours: plan.duration_hours,
+			description: plan.description,
+			features: plan.features || [],
+			highlight: plan.highlight,
+		}));
+	} catch (error) {
+		console.error("Error in getPublicInvestmentPlans:", error);
+		return [];
+	}
+}

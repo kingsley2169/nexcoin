@@ -2,7 +2,7 @@ import Link from "next/link";
 import { InvestmentPlanCard } from "@/components/investment-plan-card";
 import { MarketTicker } from "@/components/market-ticker";
 import { buttonVariants } from "@/components/ui/button";
-import { investmentPlans } from "@/lib/investment-plans";
+import { getPublicInvestmentPlans, investmentPlans } from "@/lib/investment-plans";
 
 const howItWorksSteps = [
 	{
@@ -178,7 +178,10 @@ const trustPillars = [
 	},
 ];
 
-export default function Home() {
+export default async function Home() {
+	const publicPlans = await getPublicInvestmentPlans();
+	const plansToDisplay = publicPlans.length > 0 ? publicPlans : investmentPlans;
+
 	return (
 		<>
 			<section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
@@ -286,7 +289,7 @@ export default function Home() {
 					</div>
 
 					<div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-						{investmentPlans.map((plan) => (
+						{plansToDisplay.map((plan) => (
 							<InvestmentPlanCard
 								key={plan.name}
 								plan={plan}
