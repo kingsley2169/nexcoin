@@ -37,6 +37,18 @@ body {
   animation-play-state: paused;
 }
 
+.sparkline-animate {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw-sparkline 1.6s ease-out forwards;
+}
+
+@keyframes draw-sparkline {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .account-sidebar-scroll {
   scrollbar-color: #9fc8c9 #eef6f5;
   scrollbar-width: thin;

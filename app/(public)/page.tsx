@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 import { InvestmentPlanCard } from "@/components/investment-plan-card";
 import { MarketTicker } from "@/components/market-ticker";

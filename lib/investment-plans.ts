@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/server";
+import { cookies } from "next/headers";
 
 export type InvestmentPlan = {
 	description: string;
@@ -92,12 +93,12 @@ export const investmentPlans: InvestmentPlan[] = [
 	},
 ];
 
-export async function getPublicInvestmentPlans(): Promise<PublicInvestmentPlan[]> {
+export async function getPublicInvestmentPlans(
+): Promise<PublicInvestmentPlan[]> {
 	try {
-		// Import supabase client dynamically to avoid server/client issues
-		const { createClient } = await import("@/utils/supabase/server");
-		const { cookies } = await import("next/headers");
-		const supabase = createClient(await cookies());
+
+		const cookieStore = await cookies();
+		const supabase = createClient(cookieStore);
 
 		const { data, error } = await supabase
 			.from("investment_plans")
