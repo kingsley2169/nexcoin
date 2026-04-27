@@ -194,7 +194,7 @@ export default async function Home() {
 						Nexcoin investment platform
 					</p>
 					<h1 className="mt-5 text-4xl font-semibold text-[#576363] sm:text-5xl lg:text-6xl">
-						Track crypto investments with clarity and control.
+						Trusted Cryptocurrency Investment Platform.
 					</h1>
 					<p className="mt-6 max-w-2xl text-base leading-7 text-[#5d6163] sm:text-lg">
 						A focused dashboard experience for investment plans, deposits,
