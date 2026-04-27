@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { InvestmentPlanCard } from "@/components/investment-plan-card";
 import { buttonVariants } from "@/components/ui/button";
@@ -29,6 +30,12 @@ const planGuides = [
 		title: "Prepare for withdrawal rules",
 	},
 ];
+
+const depositMethodIcons: Record<string, string> = {
+	Bitcoin: "/bitcoin.svg",
+	Ethereum: "/ethereum.svg",
+	USDT: "/usdt.svg",
+};
 
 const depositMethods = [
 	"Bitcoin",
@@ -184,8 +191,17 @@ export default async function PlansPage() {
 						{depositMethods.map((method) => (
 							<div
 								key={method}
-								className="rounded-md border border-[#d7e5e3] bg-white p-5 shadow-[0_18px_50px_rgba(87,99,99,0.08)]"
+								className="flex flex-col items-center rounded-md border border-[#d7e5e3] bg-white p-6 shadow-[0_18px_50px_rgba(87,99,99,0.08)] sm:p-7 lg:p-8"
 							>
+								<div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#eef7f6] sm:h-20 sm:w-20">
+									<Image
+										src={depositMethodIcons[method]}
+										alt={`${method} icon`}
+										width={48}
+										height={48}
+										className="object-contain"
+									/>
+								</div>
 								<p className="text-base font-semibold text-[#576363]">
 									{method}
 								</p>
