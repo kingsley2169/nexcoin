@@ -165,9 +165,7 @@ export function MarketTicker() {
 						<p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#576363]">
 							Market updates
 						</p>
-						<p className="text-xs leading-5 text-[#5d6163]">
-							Live crypto prices with mini sparkline charts for recent movement.
-						</p>
+						
 					</div>
 					<div className="-mx-4 overflow-hidden px-4 lg:mx-0 lg:px-0">
 						<div className="ticker-scroll flex w-max gap-3 motion-reduce:animate-none">

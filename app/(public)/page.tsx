@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic';
 
 import Link from "next/link";
+import Image from "next/image";
 import { InvestmentPlanCard } from "@/components/investment-plan-card";
 import { MarketTicker } from "@/components/market-ticker";
 import { buttonVariants } from "@/components/ui/button";
 import { getPublicInvestmentPlans, investmentPlans } from "@/lib/investment-plans";
+import HeroSvg from "@/public/homepage-hero.svg"
 
 const howItWorksSteps = [
 	{
@@ -186,8 +188,8 @@ export default async function Home() {
 
 	return (
 		<>
-			<section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
-				<div className="max-w-3xl">
+			<section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:flex-row lg:items-center lg:px-8">
+				<div className="relative z-10 max-w-3xl lg:flex-1">
 					<p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5F9EA0]">
 						Nexcoin investment platform
 					</p>
@@ -218,6 +220,15 @@ export default async function Home() {
 						>
 							Login
 						</Link>
+					</div>
+				</div>
+				<div className="mt-8 flex items-center justify-center lg:static lg:z-auto lg:flex-1 lg:justify-end lg:mt-0">
+					<div className="max-w-4xl opacity-90 lg:opacity-100">
+						<Image
+							src={HeroSvg}
+							alt="Nexcoin's Investment tracking platform."
+							className="w-full h-auto"
+						/>
 					</div>
 				</div>
 			</section>
@@ -396,7 +407,7 @@ export default async function Home() {
 								Trusted by thousands
 							</p>
 							<h2 className="mt-4 text-3xl font-semibold text-[#576363] sm:text-4xl">
-								Trusted by Thousands
+								Secure & Reliable Platform
 							</h2>
 							<p className="mt-4 max-w-xl text-base leading-7 text-[#5d6163]">
 								Join a community of satisfied users who rely on Nexcoin
